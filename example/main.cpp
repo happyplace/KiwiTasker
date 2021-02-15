@@ -1,10 +1,124 @@
 #include <iostream>
+#include <assert.h>
+#include <queue>
 
 #include "kiwi/Scheduler.h"
+
+namespace kiwi
+{
+struct ContextUnix
+{
+    void *rip, *rsp;
+    void *rbx, *rbp, *r12, *r13, *r14, *r15;
+};
+}
+
+// assembled version of get_context_linux.s
+// this needs to be manually updated if the contents of get_context_linux.s changes
+__attribute__((section(".text#")))
+static unsigned char get_context_code[] = {
+    0x4c, 0x8b, 0x04, 0x24,
+    0x4c, 0x89, 0x07,
+    0x4c, 0x8d, 0x44, 0x24, 0x08,
+    0x4c, 0x89, 0x47, 0x08,
+    0x48, 0x89, 0x57, 0x10,
+    0x48, 0x89, 0x6f, 0x18,
+    0x4c, 0x89, 0x67, 0x20,
+    0x4c, 0x89, 0x6f, 0x28,
+    0x4c, 0x89, 0x77, 0x30,
+    0x4c, 0x89, 0x7f, 0x38,
+    0x31, 0xc0,
+    0xc3
+};
+
+static void (*get_context)(kiwi::ContextUnix*) = (void (*)(kiwi::ContextUnix*))get_context_code;
+
+// assembed version of set_context_linux.s
+// this needs to be manually updated if the contents of set_context_linux.s changes
+__attribute__((section(".text#")))
+static unsigned char set_context_code[] = {
+    0x4c, 0x8b, 0x07,
+    0x48, 0x8b, 0x67, 0x08,
+    0x48, 0x8b, 0x57, 0x10,
+    0x48, 0x8b, 0x6f, 0x18,
+    0x4c, 0x8b, 0x67, 0x20,
+    0x4c, 0x8b, 0x6f, 0x28,
+    0x4c, 0x8b, 0x77, 0x30,
+    0x4c, 0x8b, 0x7f, 0x38,
+    0x41, 0x50,
+    0x31, 0xc0,
+    0xc3
+};
+
+static void (*set_context)(kiwi::ContextUnix*) = (void (*)(kiwi::ContextUnix*))set_context_code;
+
+// assembled version of swap_context_unix.s
+// this needs to be manually updated if the contents of swap_context_unix.s changes
+__attribute__((section(".text#")))
+static unsigned char swap_context_code[] = {
+    0x4c, 0x8b, 0x04, 0x24,
+    0x4c, 0x89, 0x07,
+    0x4c, 0x8d, 0x44, 0x24, 0x08,
+    0x4c, 0x89, 0x47, 0x08,
+    0x48, 0x89, 0x57, 0x10,
+    0x48, 0x89, 0x6f, 0x18,
+    0x4c, 0x89, 0x67, 0x20,
+    0x4c, 0x89, 0x6f, 0x28,
+    0x4c, 0x89, 0x77, 0x30,
+    0x4c, 0x89, 0x7f, 0x38,
+    0x4c, 0x8b, 0x06,
+    0x48, 0x8b, 0x66, 0x08, 
+    0x48, 0x8b, 0x5e, 0x10,
+    0x48, 0x8b, 0x6e, 0x18,
+    0x4c, 0x8b, 0x66, 0x20,
+    0x4c, 0x8b, 0x6e, 0x28,
+    0x4c, 0x8b, 0x76, 0x30,
+    0x4c, 0x8b, 0x7e, 0x38,
+    0x41, 0x50,
+    0x31, 0xc0,
+    0xc3
+};
+
+static void (*swap_context)(kiwi::ContextUnix*) = (void (*)(kiwi::ContextUnix*))swap_context_code;
+
+volatile int x = 2;
+kiwi::ContextUnix retMain;
+
+void DatFunctionBoy()
+{
+    printf("we doing it brah\n");  
+
+    set_context(&retMain);  
+}
 
 int main(int argc, char** argv)
 {
     kiwi::Scheduler scheduler;
+
+    char data[4096];
+
+    char *sp = (char*)(data + sizeof(data));
+
+    // Align stack pointer on 16-byte boundary.
+    sp = (char*)((uintptr_t)sp & -16L);
+
+    // Make 128 byte scratch space for the Red Zone. This arithmetic will not unalign
+    // our stack pointer because 128 is a multiple of 16. The Red Zone must also be
+    // 16-byte aligned.
+    sp -= 128;
+
+    get_context(&retMain);
+
+    if (x != 0)
+    {
+        x--;
+
+        kiwi::ContextUnix c = {0};
+        c.rip = (void*)DatFunctionBoy;
+        c.rsp = (void*)sp;
+
+        set_context(&c);
+    }
 
     return 0;
 }
