@@ -58,16 +58,15 @@ static unsigned char set_context_code[] = {
 
 static void (*set_context)(kiwi::ContextUnix*) = (void (*)(kiwi::ContextUnix*))set_context_code;
 
-volatile int x = 2;
-kiwi::ContextUnix retMain;
-
-std::queue<int> pendingTasks;
-
-struct BoyData
+struct Job
 {
-    const char* m_secretMsg = "This is the super secret message";
-    int fam = 0;
+    using JobFunc = void (*)(kiwi::Scheduler* scheduler, void* arg);
+
+    JobFunc m_function;
+    void* m_arg = nullptr; 
 };
+
+std::queue<Job*> pendingTasks;
 
 void DatFunctionBoy(kiwi::Scheduler* scheduler, void* data)
 {
@@ -75,12 +74,38 @@ void DatFunctionBoy(kiwi::Scheduler* scheduler, void* data)
     printf("%i)\n", datData);  
 }
 
-void fiber_start(void* scheduler, void* returnContext, void* arg)
+void TheOtherJob(kiwi::Scheduler* scheduler, void* data)
 {
-    DatFunctionBoy(NULL, arg);
+    printf("I'm the other job that needs to finish first\n");
+}
+
+void SpawnJobJob(kiwi::Scheduler* scheduler, void* data)
+{
+    printf("I'm spawning a job.\n");
+    printf("The other job should have finished.\n");
+}
+
+struct Fiber
+{
+    char m_stack[4096];
+    kiwi::ContextUnix m_context;
+    Job* m_job;
+};
+
+void fiber_start(kiwi::Scheduler* scheduler, kiwi::ContextUnix* returnContext, Fiber* fiber)
+{
+    Job* job = fiber->m_job;
+    job->m_function(scheduler, job->m_arg);
+
+    // the job has completed running and there is no more access to this job, it can be safely
+    // deleted now
+    delete job;
+    fiber->m_job = nullptr;
+
+    // TODO: we need to return the fiber to the pool
 
     // return to fiber worker after executing thread
-    set_context(reinterpret_cast<kiwi::ContextUnix*>(returnContext));
+    set_context(returnContext);
 }
 
 static void* start_fiberWorker(void* arg)
@@ -91,14 +116,14 @@ static void* start_fiberWorker(void* arg)
     get_context(&fiberWorkerReturn);
     fiberWorkerReturn.rdi = arg;
 
-    while (!pendingTasks.empty())
-    {
-        int number = pendingTasks.front();
-        pendingTasks.pop();
-        
-        char data[4096];
+    Fiber fiber;
 
-        char *sp = (char*)(data + sizeof(data));
+    while (!pendingTasks.empty())
+    {        
+        fiber.m_job = pendingTasks.front();
+        pendingTasks.pop();
+    
+        char *sp = (char*)(fiber.m_stack + sizeof(fiber.m_stack));
 
         // Align stack pointer on 16-byte boundary.
         sp = (char*)((uintptr_t)sp & -16L);
@@ -108,13 +133,13 @@ static void* start_fiberWorker(void* arg)
         // 16-byte aligned.
         sp -= 128;
 
-        kiwi::ContextUnix c = {0};
-        c.rip = (void*)fiber_start;
-        c.rsp = (void*)sp;
-        c.rdi = &scheduler;
-        c.rsi = &fiberWorkerReturn;
-        c.rdx = &number;
-        set_context(&c);
+        fiber.m_context = {0};
+        fiber.m_context.rip = (void*)fiber_start;
+        fiber.m_context.rsp = (void*)sp;
+        fiber.m_context.rdi = &scheduler;
+        fiber.m_context.rsi = &fiberWorkerReturn;
+        fiber.m_context.rdx = &fiber;
+        set_context(&fiber.m_context);
     }
     return NULL;
 }
@@ -125,9 +150,21 @@ int main(int argc, char** argv)
 {
     kiwi::Scheduler scheduler;
 
-    pendingTasks.push(13);
-    pendingTasks.push(99);
-    pendingTasks.push(23);
+    Job* job1 = new Job();
+    job1->m_function = DatFunctionBoy;
+    int job1Arg = 1337;
+    job1->m_arg = &job1Arg;
+
+    Job* job2 = new Job();
+    job2->m_function = SpawnJobJob;
+
+    pendingTasks.push(job1);
+    pendingTasks.push(job2);
+    //pendingTasks.push(23);
+
+    cpu_set_t cpuset;
+    sched_getaffinity(0, sizeof(cpuset), &cpuset);
+    int cpuCount = CPU_COUNT(&cpuset);
 
     pthread_t worker;
     int result = pthread_create(&worker, NULL, &start_fiberWorker, NULL);
@@ -144,20 +181,17 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    cpu_set_t cpuset;      
-    CPU_ZERO(&cpuset);
-    CPU_SET(0, &cpuset);
-    result = pthread_setaffinity_np(worker, sizeof(cpuset), &cpuset);
+    cpu_set_t cpuAffinity;
+    CPU_ZERO(&cpuAffinity);
+    CPU_SET(0, &cpuAffinity);
+    result = pthread_setaffinity_np(worker, sizeof(cpuAffinity), &cpuAffinity);
     if (result != 0)
     {
         assert(false);
         return 1;
     }
 
-    while (!pendingTasks.empty())
-    {
-        sleep(1);
-    }
+    sleep(5);
 
     return 0;
 }
