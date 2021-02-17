@@ -24,6 +24,6 @@ public:
     }
 
 private:
-    std::atomic_flag m_lock;
+    std::atomic_flag m_lock = ATOMIC_FLAG_INIT;
 };
 }
