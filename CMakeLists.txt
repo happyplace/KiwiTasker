@@ -5,6 +5,7 @@ project(KiwiTasker)
 include_directories(include)
 
 set(kiwi-tasker-src
+    "include/kiwi/SpinLock.h"
     "src/Scheduler.cpp"
 )
 
