@@ -1,14 +1,26 @@
 #pragma once
 
+#include <inttypes.h>
+
+#include <bits/pthreadtypes.h>
+
 namespace kiwi
 {
-class Scheduler_internal
+class SchedulerImpl
 {
 public:
-    Scheduler_internal();
-    ~Scheduler_internal();
+    SchedulerImpl();
+    ~SchedulerImpl();
 
-    Scheduler_internal(const Scheduler_internal&) = delete;
-    Scheduler_internal& operator=(const Scheduler_internal&) = delete;
+    SchedulerImpl(const SchedulerImpl&) = delete;
+    SchedulerImpl& operator=(const SchedulerImpl&) = delete;
+
+    int32_t GetCPUCount() const; 
+
+    void CreateThread(const char* threadName, int32_t threadAffinity, void *(*threadFunction) (void *), void* threadFunctionArg);
+
+private:
+    pthread_t* m_workerThreadIds;
+    int m_workerThreadIdCount;
 };
 }
