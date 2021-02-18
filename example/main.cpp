@@ -5,16 +5,10 @@
 #include <pthread.h>
 
 #include "kiwi/Scheduler.h"
-
-namespace kiwi
-{
-struct ContextUnix
-{
-    void *rip, *rsp;
-    void *rbx, *rbp, *r12, *r13, *r14, *r15;
-    void *rdi, *rsi, *rdx;
-};
-}
+#include "kiwi/Job.h"
+#include "kiwi/Context.h"
+#include "kiwi/FiberWorkerData.h"
+#include "kiwi/Counter.h"
 
 // assembled version of get_context_linux.s
 // this needs to be manually updated if the contents of get_context_linux.s changes
@@ -34,7 +28,7 @@ static unsigned char get_context_code[] = {
     0xc3
 };
 
-static void (*get_context)(kiwi::ContextUnix*) = (void (*)(kiwi::ContextUnix*))get_context_code;
+static void (*get_context)(kiwi::Context*) = (void (*)(kiwi::Context*))get_context_code;
 
 // assembed version of set_context_linux.s
 // this needs to be manually updated if the contents of set_context_linux.s changes
@@ -56,17 +50,7 @@ static unsigned char set_context_code[] = {
     0xc3
 };
 
-static void (*set_context)(kiwi::ContextUnix*) = (void (*)(kiwi::ContextUnix*))set_context_code;
-
-struct Job
-{
-    using JobFunc = void (*)(kiwi::Scheduler* scheduler, void* arg);
-
-    JobFunc m_function;
-    void* m_arg = nullptr; 
-};
-
-std::queue<Job*> pendingTasks;
+static void (*set_context)(kiwi::Context*) = (void (*)(kiwi::Context*))set_context_code;
 
 void DatFunctionBoy(kiwi::Scheduler* scheduler, void* data)
 {
@@ -74,27 +58,112 @@ void DatFunctionBoy(kiwi::Scheduler* scheduler, void* data)
     printf("%i)\n", datData);  
 }
 
+int GetFiberIndex()
+{
+    pthread_t thread = pthread_self();
+
+    cpu_set_t cpuset;
+    int result = pthread_getaffinity_np(thread, sizeof(cpuset), &cpuset);
+    if (result != 0)
+    {
+        assert(false);
+        return -1;
+    }
+
+    int cpuIndex = -1;
+    for (int i = 0; i < CPU_SETSIZE; i++)
+    {
+        if (CPU_ISSET(i, &cpuset))
+        {
+            cpuIndex = i;
+        }
+    }
+
+    assert(cpuIndex >= 0); // either the workers are setup incorrectly, or this function is being called from a non-fiber thread
+
+    return cpuIndex;
+}
+
+void WaitForCounter(kiwi::Scheduler* scheduler, kiwi::Counter* counter, uint64_t value)
+{
+    kiwi::FiberWorkerData* workerData = &scheduler->m_fiberWorkerData[GetFiberIndex()];
+    kiwi::Fiber* fiber = workerData->m_currentFiber;
+
+    volatile bool returnedFromWait = false;
+
+    get_context(&fiber->m_context);
+
+    if (returnedFromWait)
+    {
+        returnedFromWait = true;
+
+        // TODO: remove fiber from watch list
+
+        set_context(&fiber->m_context);
+    }
+    else
+    {
+        counter->m_lock.Lock();
+        if (counter->m_value != value)
+        {
+            scheduler->m_waitList.push_back(fiber);
+
+            kiwi::Counter::WaitingFiber waitingFiber;
+            waitingFiber.m_value = value;
+            waitingFiber.m_fiber = fiber;
+            counter->m_waitingFibers.push_back(std::move(waitingFiber));
+
+            counter->m_lock.Unlock();
+
+            kiwi::FiberWorkerData* workerData = &scheduler->m_fiberWorkerData[GetFiberIndex()];
+            set_context(&workerData->m_fiberWorkerReturn);
+        }  
+    }
+}
+
 void TheOtherJob(kiwi::Scheduler* scheduler, void* data)
 {
-    printf("I'm the other job that needs to finish first\n");
+    pthread_t thread = pthread_self();
+
+    cpu_set_t cpuset;
+    int result = pthread_getaffinity_np(thread, sizeof(cpuset), &cpuset);
+    if (result != 0)
+    {
+        assert(false);
+        return;
+    }
+
+    int cpuIndex = -1;
+    for (int i = 0; i < CPU_SETSIZE; i++)
+    {
+        if (CPU_ISSET(i, &cpuset))
+        {
+            cpuIndex = i;
+        }
+    }
+
+    printf("TheOtherJob: I'm the other job that needs to finish first. I'm on CPU: %i\n", cpuIndex);
 }
 
 void SpawnJobJob(kiwi::Scheduler* scheduler, void* data)
 {
-    printf("I'm spawning a job.\n");
-    printf("The other job should have finished.\n");
+    printf("SpawnJobJob: I'm spawning a job.\n");
+
+    kiwi::Counter counter(scheduler);
+
+    kiwi::Job otherJob;
+    otherJob.m_function = TheOtherJob;
+    otherJob.m_arg = nullptr;
+    scheduler->AddJob(otherJob, kiwi::JobPriority::Normal, &counter);
+
+    WaitForCounter(scheduler, &counter, 0);
+
+    printf("SpawnJobJob: The other job should have finished.\n");
 }
 
-struct Fiber
+void fiber_start(kiwi::Scheduler* scheduler, kiwi::FiberWorkerData* data, kiwi::Fiber* fiber)
 {
-    char m_stack[4096];
-    kiwi::ContextUnix m_context;
-    Job* m_job;
-};
-
-void fiber_start(kiwi::Scheduler* scheduler, kiwi::ContextUnix* returnContext, Fiber* fiber)
-{
-    Job* job = fiber->m_job;
+    kiwi::Job* job = fiber->m_job;
     job->m_function(scheduler, job->m_arg);
 
     // the job has completed running and there is no more access to this job, it can be safely
@@ -102,28 +171,52 @@ void fiber_start(kiwi::Scheduler* scheduler, kiwi::ContextUnix* returnContext, F
     delete job;
     fiber->m_job = nullptr;
 
-    // TODO: we need to return the fiber to the pool
+    // if we have a counter attached to ourselve decrement since this fiber is done
+    if (fiber->m_counter)
+    {
+        fiber->m_counter->Decrement();
+    }
+
+    data->m_fiberPoolStatus.set(data->m_fiberPoolIndex, false);
+    data->m_currentFiber = nullptr;
 
     // return to fiber worker after executing thread
-    set_context(returnContext);
+    set_context(&data->m_fiberWorkerReturn);
 }
 
 static void* start_fiberWorker(void* arg)
 {
-    kiwi::Scheduler scheduler;
+    kiwi::FiberWorkerData* data = reinterpret_cast<kiwi::FiberWorkerData*>(arg);
 
-    kiwi::ContextUnix fiberWorkerReturn;
-    get_context(&fiberWorkerReturn);
-    fiberWorkerReturn.rdi = arg;
+    get_context(&data->m_fiberWorkerReturn);  
 
-    Fiber fiber;
-
-    while (!pendingTasks.empty())
+    while (!data->m_scheduler->m_pendingTasks.empty())
     {        
-        fiber.m_job = pendingTasks.front();
-        pendingTasks.pop();
-    
-        char *sp = (char*)(fiber.m_stack + sizeof(fiber.m_stack));
+        kiwi::Fiber* fiber = nullptr;
+        for (std::size_t i = 0; i < 2; ++i)
+        {
+            if (!data->m_fiberPoolStatus.test(i))
+            {
+                data->m_fiberPoolStatus.set(i);
+                data->m_fiberPoolIndex = i;
+                fiber = &data->m_fiberPool[i];
+                break;
+            }
+        }
+        assert(fiber != nullptr); // what???
+        data->m_currentFiber = fiber;
+
+        {
+            data->m_scheduler->m_pendingTasksLock.Lock();
+            kiwi::Scheduler::PendingJob pendingJob = data->m_scheduler->m_pendingTasks.front();
+            data->m_scheduler->m_pendingTasks.pop();
+            data->m_scheduler->m_pendingTasksLock.Unlock();
+
+            fiber->m_job = pendingJob.m_job;
+            fiber->m_counter = pendingJob.m_counter;
+        }
+
+        char *sp = (char*)(fiber->m_stack + sizeof(fiber->m_stack));
 
         // Align stack pointer on 16-byte boundary.
         sp = (char*)((uintptr_t)sp & -16L);
@@ -133,14 +226,25 @@ static void* start_fiberWorker(void* arg)
         // 16-byte aligned.
         sp -= 128;
 
-        fiber.m_context = {0};
-        fiber.m_context.rip = (void*)fiber_start;
-        fiber.m_context.rsp = (void*)sp;
-        fiber.m_context.rdi = &scheduler;
-        fiber.m_context.rsi = &fiberWorkerReturn;
-        fiber.m_context.rdx = &fiber;
-        set_context(&fiber.m_context);
+        fiber->m_context = {0};
+        fiber->m_context.rip = (void*)fiber_start;
+        fiber->m_context.rsp = (void*)sp;
+        fiber->m_context.rdi = data->m_scheduler;
+        fiber->m_context.rsi = data;
+        fiber->m_context.rdx = fiber;
+        set_context(&fiber->m_context);
     }
+
+    while (!data->m_scheduler->m_readyList.empty())
+    { 
+        std::list<kiwi::Fiber*>& readyList = data->m_scheduler->m_readyList;
+
+        kiwi::Fiber* fiber = readyList.front();
+        readyList.pop_front();
+
+        set_context(&fiber->m_context);
+    }
+
     return NULL;
 }
 
@@ -149,25 +253,37 @@ static void* start_fiberWorker(void* arg)
 int main(int argc, char** argv)
 {
     kiwi::Scheduler scheduler;
+    scheduler.Init();
 
-    Job* job1 = new Job();
-    job1->m_function = DatFunctionBoy;
+    kiwi::Job jobs[2];
+
+    jobs[0].m_function = DatFunctionBoy;
     int job1Arg = 1337;
-    job1->m_arg = &job1Arg;
+    jobs[0].m_arg = &job1Arg;
 
-    Job* job2 = new Job();
-    job2->m_function = SpawnJobJob;
+    jobs[1].m_function = SpawnJobJob;
 
-    pendingTasks.push(job1);
-    pendingTasks.push(job2);
-    //pendingTasks.push(23);
+    scheduler.AddJob(jobs[0]);
+    scheduler.AddJob(jobs[1]);
 
-    cpu_set_t cpuset;
-    sched_getaffinity(0, sizeof(cpuset), &cpuset);
-    int cpuCount = CPU_COUNT(&cpuset);
+    scheduler.m_fiberWorkerData = new kiwi::FiberWorkerData[1];
+    scheduler.m_fiberWorkerData[0].m_scheduler = &scheduler;
+
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+
+    cpu_set_t cpuAffinity;
+    CPU_ZERO(&cpuAffinity);
+    CPU_SET(0, &cpuAffinity);
+    int result = pthread_attr_setaffinity_np(&attr, sizeof(cpuAffinity), &cpuAffinity);
+    if (result != 0)
+    {
+        assert(false);
+        return 1;
+    }
 
     pthread_t worker;
-    int result = pthread_create(&worker, NULL, &start_fiberWorker, NULL);
+    result = pthread_create(&worker, &attr, start_fiberWorker, &scheduler.m_fiberWorkerData[0]);
     if (result != 0)
     {
         assert(false);
@@ -181,17 +297,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    cpu_set_t cpuAffinity;
-    CPU_ZERO(&cpuAffinity);
-    CPU_SET(0, &cpuAffinity);
-    result = pthread_setaffinity_np(worker, sizeof(cpuAffinity), &cpuAffinity);
-    if (result != 0)
-    {
-        assert(false);
-        return 1;
-    }
-
-    sleep(5);
+    sleep(5);    
 
     return 0;
 }
