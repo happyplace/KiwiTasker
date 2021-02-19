@@ -54,7 +54,8 @@ void* FiberWorkerThreadMain(void* arg)
 
 void Scheduler::Init()
 {
-    constexpr size_t threadNameBufferSize = 16;
+    constexpr size_t threadNameBufferSize = 128;
+    constexpr int threadNameMaxSize = 16;
     char threadNameBuffer[threadNameBufferSize];
 
     const int32_t cpuCount = m_impl->GetCPUCount();
@@ -70,7 +71,12 @@ void Scheduler::Init()
         storage->m_mutex = &m_mutex;
         storage->m_closeWorker = &m_closeWorkers;
 
-        snprintf(threadNameBuffer, threadNameBufferSize, "Kiwi Worker %i", i);
+        int result = snprintf(threadNameBuffer, threadNameBufferSize, "Kiwi Worker %i", i);
+        // if the resulting thread name is going to be larger than the max thread name size, truncate the name
+        if (result > threadNameMaxSize)
+        {
+            threadNameBuffer[threadNameMaxSize - 1] = '\0';
+        }
         m_impl->CreateThread(threadNameBuffer, i, FiberWorkerThreadMain, storage); 
     }
 }
