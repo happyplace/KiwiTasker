@@ -1,12 +1,9 @@
 #pragma once
 
-#if defined(DEBUG) || defined(_DEBUG) || !defined(NDEBUG)
-
-// enables extra error checking one queues to makes sure invalid values aren't
-// used for the size and detecting when the list is full
-#ifndef KIWI_QUEUE_ERROR_CHECKING
-#define KIWI_QUEUE_ERROR_CHECKING
-#endif // KIWI_QUEUE_ERROR_CHECKING
+// if this is defined fiber pools will dynamically create new pools if the pool gets full
+//#ifndef KIWI_FIBERPOOL_DYNAMIC_MODE
+//#define KIWI_FIBERPOOL_DYNAMIC_MODE
+//#endif // KIWI_FIBERPOOL_DYNAMIC_MODE
 
 // if this is defined queues will automatically expand their container size if they get filled
 //#ifndef KIWI_QUEUE_DYNAMIC_MODE
@@ -17,5 +14,18 @@
 //#ifndef KIWI_QUEUE_DYNAMIC_INCREASE_MULTIPLIER
 //#define KIWI_QUEUE_DYNAMIC_INCREASE_MULTIPLIER 2.0f
 //#endif // KIWI_QUEUE_DYNAMIC_INCREASE_MULTIPLIER
+
+#if defined(DEBUG) || defined(_DEBUG) || !defined(NDEBUG)
+
+// enables error checking for queues to makes sure invalid values aren't
+// used for the size and detecting when the list is full
+#ifndef KIWI_QUEUE_ERROR_CHECKING
+#define KIWI_QUEUE_ERROR_CHECKING
+#endif // KIWI_QUEUE_ERROR_CHECKING
+
+// enables error checking for fiber pools, throws error if the fiber pool is ever full
+#ifndef KIWI_FIBERPOOL_ERROR_CHECKING
+#define KIWI_FIBERPOOL_ERROR_CHECKING
+#endif // KIWI_FIBERPOOL_ERROR_CHECKING
 
 #endif // defined(DEBUG) || defined(_DEBUG) || !defined(NDEBUG)

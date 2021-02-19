@@ -21,11 +21,13 @@ set(kiwi-tasker-src
     "include/kiwi/JobPriority.h"
     "include/kiwi/Config.h"
     "include/kiwi/Queue.h"
+    "include/kiwi/FiberPool.h"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
     "src/Scheduler.cpp"    
     "src/Counter.cpp"
+    "src/FiberPool.cpp"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
