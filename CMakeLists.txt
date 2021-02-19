@@ -16,16 +16,21 @@ set(kiwi-tasker-src
     "include/kiwi/Context.h"
     "include/kiwi/Counter.h"
     "include/kiwi/Fiber.h"
-    "include/kiwi/FiberWorkerData.h"
+    "include/kiwi/FiberWorkerStorage.h"
     "include/kiwi/Job.h"
     "include/kiwi/JobPriority.h"
+    "include/kiwi/Config.h"
+    "include/kiwi/Queue.h"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
-    "src/Scheduler.cpp"
-    "src/Scheduler_internal.h"
-    "src/Scheduler_internal_unix.cpp"
+    "src/Scheduler.cpp"    
     "src/Counter.cpp"
+)
+
+set(kiwi-tasker-src ${kiwi-tasker-src}
+    "src/SchedulerImpl_unix.h"
+    "src/SchedulerImpl_unix.cpp"
 )
 
 find_package (Threads REQUIRED)
