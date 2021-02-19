@@ -20,7 +20,10 @@ using namespace kiwi;
 
 SchedulerImpl::SchedulerImpl()
 {
-    m_workerThreadIdCount = GetCPUCount();
+    cpu_set_t cpuset;
+    sched_getaffinity(0, sizeof(cpuset), &cpuset);
+    m_workerThreadIdCount = static_cast<int32_t>(CPU_COUNT(&cpuset));
+
     m_workerThreadIds = new pthread_t[m_workerThreadIdCount];    
 }
 
@@ -35,9 +38,7 @@ SchedulerImpl::~SchedulerImpl()
 
 int32_t SchedulerImpl::GetCPUCount() const
 {
-    cpu_set_t cpuset;
-    sched_getaffinity(0, sizeof(cpuset), &cpuset);
-    return static_cast<int32_t>(CPU_COUNT(&cpuset));
+    return m_workerThreadIdCount;
 }
 
 void SchedulerImpl::CreateThread(const char* threadName, int32_t threadAffinity, void *(*threadFunction) (void *), void* threadFunctionArg)

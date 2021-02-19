@@ -26,6 +26,8 @@ Scheduler::~Scheduler()
 
     m_conditionVariable.notify_all();
 
+    // we can't call delete on impl until all the worker threads have been signaled that they
+    // should shutdown and woken up
     delete m_impl;
 
     if (m_workerStorage != nullptr)
