@@ -27,6 +27,9 @@ public:
     Scheduler(const Scheduler&) = delete;
     Scheduler& operator=(const Scheduler&) = delete;
 
+    // initializes memory and starts worker threads, this function should be called before calling 
+    // any other functions on the Scheduler.
+    // all the clean up for this function is handled in the decontructor 
     void Init();
 
     // add a job to the queue, once this function returns it's safe to delete the job object because a copy
@@ -38,6 +41,8 @@ public:
     void AddJob(const Job* jobs, const uint32_t size, const JobPriority priority = JobPriority::Normal, Counter* counter = nullptr);
 
     void WaitForCounter(Counter* counter, uint64_t value = 0);    
+
+    SchedulerImpl* GetImpl();
 
 private:
     SchedulerImpl* m_impl = nullptr;

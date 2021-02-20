@@ -4,6 +4,8 @@
 
 #include <pthread.h>
 
+#include "kiwi/Context.h"
+
 #ifndef PTRD_ERR_HNDLR
 #define PTRD_ERR_HNDLR(x) \
 { \
@@ -15,6 +17,55 @@
 	} \
 }
 #endif // PTRD_ERR_HNDLR(x)
+
+// assembled version of get_context_linux.s
+// this needs to be manually updated if the contents of get_context_linux.s changes
+__attribute__((section(".text#")))
+static unsigned char get_context_code[] = {
+#if defined(__x86_64__)
+    0x4c, 0x8b, 0x04, 0x24,
+    0x4c, 0x89, 0x07,
+    0x4c, 0x8d, 0x44, 0x24, 0x08,
+    0x4c, 0x89, 0x47, 0x08,
+    0x48, 0x89, 0x57, 0x10,
+    0x48, 0x89, 0x6f, 0x18,
+    0x4c, 0x89, 0x67, 0x20,
+    0x4c, 0x89, 0x6f, 0x28,
+    0x4c, 0x89, 0x77, 0x30,
+    0x4c, 0x89, 0x7f, 0x38,
+    0x31, 0xc0,
+    0xc3
+#else
+#error get context does not exist for your cpu architecture
+#endif
+};
+
+// assembed version of set_context_linux.s
+// this needs to be manually updated if the contents of set_context_linux.s changes
+__attribute__((section(".text#")))
+static unsigned char set_context_code[] = {
+#if defined(__x86_64__)
+    0x4c, 0x8b, 0x07,
+    0x48, 0x8b, 0x67, 0x08,
+    0x48, 0x8b, 0x5f, 0x10,
+    0x48, 0x8b, 0x6f, 0x18,
+    0x4c, 0x8b, 0x67, 0x20,
+    0x4c, 0x8b, 0x6f, 0x28,
+    0x4c, 0x8b, 0x77, 0x30,
+    0x4c, 0x8b, 0x7f, 0x38,
+    0x41, 0x50,
+    0x48, 0x8b, 0x77, 0x48,
+    0x48, 0x8b, 0x57, 0x50,
+    0x48, 0x8b, 0x7f, 0x40,
+    0x31, 0xc0,
+    0xc3
+#else
+#error set context does not exist for your cpu architecture
+#endif
+};
+
+static void (*get_context)(kiwi::Context*) = (void (*)(kiwi::Context*))get_context_code;
+static void (*set_context)(kiwi::Context*) = (void (*)(kiwi::Context*))set_context_code;
 
 using namespace kiwi;
 
@@ -56,4 +107,51 @@ void SchedulerImpl::CreateThread(const char* threadName, int32_t threadAffinity,
     pthread_attr_destroy(&attr);
 
     PTRD_ERR_HNDLR(pthread_setname_np(m_workerThreadIds[threadAffinity], threadName));
+}
+
+void SchedulerImpl::SetContextInstructionAndStack(Context* context, void* instruction, void* stack) const
+{
+    context->rip = instruction;
+    context->rsp = stack;
+}
+
+void SchedulerImpl::SetContextParameters(Context* context, void* param0, void* param1, void* param2) const
+{
+#if defined(__x86_64__)
+    context->rdi = param0;
+    context->rsi = param1;
+    context->rdx = param2;
+#else
+#error SetContextParameters does not exist for your cpu architecture
+#endif
+}
+
+char* SchedulerImpl::GetStackPointerForStackBuffer(char* stackBuffer) const
+{
+#if defined(__x86_64__)
+    char *sp = (char*)(stackBuffer + sizeof(stackBuffer));
+
+    // Align stack pointer on 16-byte boundary.
+    sp = (char*)((uintptr_t)sp & -16L);
+
+    // Make 128 byte scratch space for the Red Zone. This arithmetic will not unalign
+    // our stack pointer because 128 is a multiple of 16. The Red Zone must also be
+    // 16-byte aligned.
+    sp -= 128;
+
+    return sp;
+#else
+#error GetStackPointerForStack does not exist for your cpu architecture
+return NULL;
+#endif
+}
+
+void SchedulerImpl::SetContext(Context* context) const
+{
+    set_context(context);
+}
+
+void SchedulerImpl::GetContext(Context* context) const
+{
+    get_context(context);
 }

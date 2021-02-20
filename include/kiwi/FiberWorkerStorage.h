@@ -4,6 +4,7 @@
 #include <condition_variable>
 #include <mutex>
 
+#include "kiwi/Context.h"
 #include "kiwi/FiberPool.h"
 #include "kiwi/PendingJob.h"
 #include "kiwi/Queue.h"
@@ -16,7 +17,9 @@ struct Fiber;
 
 struct FiberWorkerStorage
 {
-    kiwi::Scheduler* m_scheduler = nullptr;
+    Scheduler* m_scheduler = nullptr;
+    Context m_context;
+
     std::condition_variable* m_conditionVariable = nullptr;
     std::mutex* m_mutex = nullptr;
     std::atomic_bool* m_closeWorker = nullptr;

@@ -44,16 +44,37 @@ Scheduler::~Scheduler()
     }
 }
 
+void FiberStart(kiwi::Scheduler* scheduler, kiwi::FiberWorkerStorage* storage, kiwi::Fiber* fiber)
+{
+    fiber->m_job.m_function(scheduler, fiber->m_job.m_arg);
+
+    // return fiber to pool
+    storage->m_fiberPool->ReturnFiber(fiber);
+
+    // return to fiber worker main function
+    scheduler->GetImpl()->SetContext(&storage->m_context);
+}
+
 void* FiberWorkerThreadMain(void* arg)
 {
     FiberWorkerStorage* storage = reinterpret_cast<FiberWorkerStorage*>(arg);
+    SchedulerImpl* schedulerImpl = storage->m_scheduler->GetImpl();
+    
+    storage->m_context = {0};
+    schedulerImpl->GetContext(&storage->m_context);
 
     while (!storage->m_closeWorker->load())
-    {
-        Fiber* fiber = nullptr;        
+    {          
+        Fiber* fiber = nullptr;  
         if (storage->GetOrWaitForNextFiber(&fiber))
         {
-            storage->m_fiberPool->ReturnFiber(fiber);
+            fiber->m_context = {0};
+
+            char* stackPointer = schedulerImpl->GetStackPointerForStackBuffer(fiber->m_stack);
+            schedulerImpl->SetContextInstructionAndStack(&fiber->m_context, (void*)FiberStart, (void*)stackPointer);
+            schedulerImpl->SetContextParameters(&fiber->m_context, storage->m_scheduler, storage, fiber);
+            
+            schedulerImpl->SetContext(&fiber->m_context);
         }
     }
 
@@ -92,6 +113,11 @@ void Scheduler::Init()
         }
         m_impl->CreateThread(threadNameBuffer, i, FiberWorkerThreadMain, storage); 
     }
+}
+
+SchedulerImpl* Scheduler::GetImpl()
+{
+    return m_impl;
 }
 
 void Scheduler::AddJob(const Job* job, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)
