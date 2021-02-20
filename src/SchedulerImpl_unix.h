@@ -20,6 +20,9 @@ public:
     int32_t GetCPUCount() const; 
 
     void CreateThread(const char* threadName, int32_t threadAffinity, void *(*threadFunction) (void *), void* threadFunctionArg);
+    
+    // should be called on worker threads after the thread is created
+    void BlockSignalsOnThread();
 
     void SetContextInstructionAndStack(Context* context, void* instruction, void* stack) const;
     void SetContextParameters(Context* context, void* param0, void* param1, void* param2) const;

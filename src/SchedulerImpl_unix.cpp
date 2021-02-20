@@ -3,6 +3,7 @@
 #include <assert.h>
 
 #include <pthread.h>
+#include <signal.h>
 
 #include "kiwi/Context.h"
 
@@ -85,6 +86,7 @@ SchedulerImpl::~SchedulerImpl()
         PTRD_ERR_HNDLR(pthread_join(m_workerThreadIds[i], NULL));
     }
     delete[] m_workerThreadIds;
+    m_workerThreadIds = nullptr;
 }
 
 int32_t SchedulerImpl::GetCPUCount() const
@@ -107,6 +109,14 @@ void SchedulerImpl::CreateThread(const char* threadName, int32_t threadAffinity,
     pthread_attr_destroy(&attr);
 
     PTRD_ERR_HNDLR(pthread_setname_np(m_workerThreadIds[threadAffinity], threadName));
+}
+
+void SchedulerImpl::BlockSignalsOnThread()
+{
+    // Don't permit signal delivery to this thread.
+    sigset_t mask;
+    sigfillset(&mask);
+    PTRD_ERR_HNDLR(pthread_sigmask(SIG_BLOCK, &mask, nullptr));
 }
 
 void SchedulerImpl::SetContextInstructionAndStack(Context* context, void* instruction, void* stack) const
