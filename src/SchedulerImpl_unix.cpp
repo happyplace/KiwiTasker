@@ -94,6 +94,31 @@ int32_t SchedulerImpl::GetCPUCount() const
     return m_workerThreadIdCount;
 }
 
+int32_t SchedulerImpl::GetWorkerThreadIndex() const
+{
+    pthread_t thread = pthread_self();
+
+    cpu_set_t cpuset;
+    int result = pthread_getaffinity_np(thread, sizeof(cpuset), &cpuset);
+    if (result != 0)
+    {
+        assert(false);
+        return -1;
+    }
+
+    int cpuIndex = -1;
+    for (int i = 0; i < CPU_SETSIZE; i++)
+    {
+        if (CPU_ISSET(i, &cpuset))
+        {
+            // assuming this is called from a worker thread only one cpu should set so we can return on the first true
+            return i;
+        }
+    }
+
+    return -1;
+}
+
 void SchedulerImpl::CreateThread(const char* threadName, int32_t threadAffinity, void *(*threadFunction) (void *), void* threadFunctionArg)
 {
     pthread_attr_t attr;
