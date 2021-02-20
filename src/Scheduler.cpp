@@ -1,8 +1,10 @@
 #include "kiwi/Scheduler.h"
 
 #include "kiwi/Counter.h"
-#include "kiwi/Job.h"
+#include "kiwi/FiberPool.h"
 #include "kiwi/FiberWorkerStorage.h"
+#include "kiwi/Job.h"
+#include "kiwi/PendingJob.h"
 
 #if defined(__linux__) && !defined(__ANDROID__)
 #include "SchedulerImpl_unix.h"
@@ -13,8 +15,12 @@
 using namespace kiwi;
 
 Scheduler::Scheduler()
+    : m_queueHigh(KiwiConfig::schedulerQueueSize)
+    , m_queueNormal(KiwiConfig::schedulerQueueSize)    
+    , m_queueLow(KiwiConfig::schedulerQueueSize)
 {
-    m_impl = new SchedulerImpl();
+    m_impl = new SchedulerImpl();   
+    m_fiberPool = new FiberPool(KiwiConfig::schedulerFiberPoolSize);
 }
 
 Scheduler::~Scheduler()
@@ -29,6 +35,8 @@ Scheduler::~Scheduler()
     // we can't call delete on impl until all the worker threads have been signaled that they
     // should shutdown and woken up
     delete m_impl;
+
+    delete m_fiberPool;
 
     if (m_workerStorage != nullptr)
     {
@@ -70,6 +78,11 @@ void Scheduler::Init()
         storage->m_conditionVariable = &m_conditionVariable;
         storage->m_mutex = &m_mutex;
         storage->m_closeWorker = &m_closeWorkers;
+        storage->m_queueLock = &m_queueLock;    
+        storage->m_queueHigh = &m_queueHigh;
+        storage->m_queueNormal = &m_queueNormal;    
+        storage->m_queueLow = &m_queueLow;
+        storage->m_fiberPool = m_fiberPool;
 
         int result = snprintf(threadNameBuffer, threadNameBufferSize, "Kiwi Worker %i", i);
         // if the resulting thread name is going to be larger than the max thread name size, truncate the name
@@ -81,24 +94,35 @@ void Scheduler::Init()
     }
 }
 
-void Scheduler::AddJob(const Job& job, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)
+void Scheduler::AddJob(const Job* job, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)
 {
-    AddJob(&job, 1, priority, counter);
+    AddJob(job, 1, priority, counter);
 }
 
 void Scheduler::AddJob(const Job* jobs, const uint32_t size, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)
 {
-    // PendingJob pendingJob;
-    // pendingJob.m_job = new Job(job);
-    // pendingJob.m_priority = priority;
-    // pendingJob.m_counter = counter;
+    for (uint32_t i = 0; i < size; ++i)
+    {
+        PendingJob pendingJob;
+        pendingJob.m_job = jobs[i]; 
+        pendingJob.m_counter = counter;
 
-    // if (counter)
-    // {
-    //     counter->Increment();
-    // }
-
-    // m_pendingTasksLock.Lock();
-    // m_pendingTasks.push(std::move(pendingJob));
-    // m_pendingTasksLock.Unlock();
+        m_queueLock.Lock();
+        switch (priority)
+        {
+        case JobPriority::High:
+            m_queueHigh.Push(pendingJob);
+            break;
+        case JobPriority::Normal:
+            m_queueNormal.Push(pendingJob);
+            break;
+        case JobPriority::Low:
+            m_queueLow.Push(pendingJob);
+            break;
+        default:
+            assert(!"unsupported job priority");
+            break;    
+        }
+        m_queueLock.Unlock();
+    }
 }
