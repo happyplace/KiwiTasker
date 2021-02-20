@@ -87,11 +87,12 @@ public:
         if (m_headIndex >= 0)
         {
             *outValue = m_container[m_headIndex];
+
+            // move head index by one, and wrap around to the front of the array if we're at the end
+            m_headIndex = (++m_headIndex) >= m_containerSize ? 0 : m_headIndex;
+
             success = true;
         }
-
-        // move head index by one, and wrap around to the front of the array if we're at the end
-        m_headIndex = (++m_headIndex) >= m_containerSize ? 0 : m_headIndex;
 
         return success;
     }
