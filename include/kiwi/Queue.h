@@ -91,6 +91,9 @@ public:
             // move head index by one, and wrap around to the front of the array if we're at the end
             m_headIndex = (++m_headIndex) >= m_containerSize ? 0 : m_headIndex;
 
+            // if the head index is now equal to the rear then the list is empty
+            m_headIndex = m_headIndex == m_rearIndex ? -1 : m_headIndex;
+
             success = true;
         }
 
