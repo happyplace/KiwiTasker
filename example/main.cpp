@@ -31,13 +31,20 @@ int main(int /*argc*/, char** /*argv*/)
     job->m_function = EndApplicationJob;
 
     // pass pointer to quit variable so we can change it true when our job completes
+    // if a pointer is used by a job that pointer needs to remain valid until the job is completed, quit exists
+    // on the stack so the memory will be valid.
     job->m_arg = &quit;
 
     // add job to the scheduler as a normal priority, if it's an important job we can run it as high priority
     // or we can use low if it's minor task not required by the main loop
     scheduler.AddJob(job, kiwi::JobPriority::Normal);
 
-    // loop and sleep until quit is changed to true inside of EndApplicationJob
+    // once the job has been added to the scheduler it's save to delete, because a copy is kept
+    // remember that any pointers, that this job may have access to needs to be valid until the job
+    // completes execution
+    delete job;
+
+    // loop on quit until it's value is changed inside of EndApplicationJob
     while (!quit)
     {
         sleep(1);
