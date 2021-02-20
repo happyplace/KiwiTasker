@@ -53,7 +53,7 @@ void* FiberWorkerThreadMain(void* arg)
         Fiber* fiber = nullptr;        
         if (storage->GetOrWaitForNextFiber(&fiber))
         {
-            
+            storage->m_fiberPool->ReturnFiber(fiber);
         }
     }
 

@@ -1,17 +1,17 @@
 #pragma once
 
-#include "Context.h"
+#include "kiwi/Context.h"
+#include "kiwi/Job.h"
 
 namespace kiwi
 {
-struct Job;
 class Counter;
 
 struct Fiber
 {
     char m_stack[4096];
     kiwi::Context m_context;
-    kiwi::Job* m_job = nullptr;
+    kiwi::Job m_job;
     union
     {
         kiwi::Counter* m_counter = nullptr;

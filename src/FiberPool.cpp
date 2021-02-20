@@ -88,10 +88,10 @@ Fiber* FiberPool::GetFiber()
         poolLink->m_next = nullptr;
         
         // return the first fiber in the buffer to the caller since we just made more for them
-        fiber = &poolLink->m_buffer[0];
+        fiber = poolLink->m_buffer;
 
         // point at the second element before we're giving the first element to the caller
-        m_firstFree = &poolLink->m_buffer[1];
+        m_firstFree = fiber->next_;
 
         // append to end of fiber pool links list
         FiberPoolLinks* link = m_firstPoolLink;

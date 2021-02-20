@@ -28,6 +28,7 @@ set(kiwi-tasker-src ${kiwi-tasker-src}
     "src/Scheduler.cpp"    
     "src/Counter.cpp"
     "src/FiberPool.cpp"
+    "src/FiberWorkerStorage.cpp"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
