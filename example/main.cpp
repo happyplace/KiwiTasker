@@ -160,9 +160,11 @@ static void (*swap_context)(Context*, Context*) = (void (*)(Context*,Context*))s
 #include <queue>
 #include <atomic>
 
+constexpr uint32_t stackSize = 512;
+
 struct Fiber
 {
-    char* stackBuffer[512];
+    char* stackBuffer[stackSize];
 };
 
 struct Jobs
@@ -218,6 +220,11 @@ void GotHere(void* arg)
 //     assert(!"should never get here");
 // }
 
+#if __has_include(<valgrind/valgrind.h>)
+#include <valgrind/valgrind.h>
+#define KIWI_HAS_VALGRIND
+#endif
+
 void* worker_thread_entry(void* arg)
 {
     WorkerData* data = reinterpret_cast<WorkerData*>(arg);
@@ -256,7 +263,7 @@ void* worker_thread_entry(void* arg)
             returningFromJob = true;
 
             //char *sp = (char*)(stackBuffer + sizeof(stackBuffer));
-            char *sp = (char*)(job.m_fiber->stackBuffer + 512);
+            char *sp = (char*)(job.m_fiber->stackBuffer + stackSize);
 
             // Align stack pointer on 16-byte boundary.
             sp = (char*)((uintptr_t)sp & -16L);
@@ -272,7 +279,17 @@ void* worker_thread_entry(void* arg)
             funcJmp.rdi = (void*)&job; 
             funcJmp.rsi = (void*)&main;
 
-            swap_context(&funcJmp, &main);
+#if defined(KIWI_HAS_VALGRIND)
+            // Before context switch, register our stack with Valgrind.
+            unsigned stack_id = VALGRIND_STACK_REGISTER(job.m_fiber->stackBuffer, job.m_fiber->stackBuffer + stackSize);
+#endif
+
+            swap_context(&main, &funcJmp);
+
+#if defined(KIWI_HAS_VALGRIND)
+            // We've returned from the context switch, we can now throw that stack out.
+            VALGRIND_STACK_DEREGISTER(stack_id);
+#endif
         }
     }
 
