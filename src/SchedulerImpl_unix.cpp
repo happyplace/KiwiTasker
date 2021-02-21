@@ -117,7 +117,8 @@ void SchedulerImpl::SetContextParameters(Context* context, void* param0, void* p
 char* SchedulerImpl::GetStackPointerForStackBuffer(char* stackBuffer) const
 {
 #if defined(__x86_64__)
-    char *sp = (char*)(stackBuffer + sizeof(stackBuffer));
+    const size_t bufferSize = sizeof(stackBuffer);
+    char *sp = (char*)(stackBuffer + bufferSize);
 
     // Align stack pointer on 16-byte boundary.
     sp = (char*)((uintptr_t)sp & -16L);
