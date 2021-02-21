@@ -48,6 +48,7 @@ FiberPool::~FiberPool()
 #endif // KIWI_FIBERPOOL_ERROR_CHECKING
     {
         delete[] m_pool;
+        m_pool = nullptr;
     }
 #endif // KIWI_FIBERPOOL_DYNAMIC_MODE
 }

@@ -25,6 +25,7 @@ struct FiberWorkerStorage
     std::atomic_bool* m_closeWorker = nullptr;
 
     FiberPool* m_fiberPool = nullptr;
+    Fiber* m_fiber = nullptr;
 
     SpinLock* m_queueLock = nullptr;    
     Queue<PendingJob>* m_queueHigh = nullptr;

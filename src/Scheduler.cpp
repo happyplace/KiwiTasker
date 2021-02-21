@@ -5,12 +5,9 @@
 #include "kiwi/FiberWorkerStorage.h"
 #include "kiwi/Job.h"
 #include "kiwi/PendingJob.h"
-
-#if defined(__linux__) && !defined(__ANDROID__)
-#include "SchedulerImpl_unix.h"
-#else
-#error "This platform does not have a Scheduler Implementation class"
-#endif
+#include "kiwi/FiberWorkerStorage.h"
+#include "kiwi/FiberWorkerThreadMain.h"
+#include "kiwi/SchedulerImpl.h"
 
 using namespace kiwi;
 
@@ -26,59 +23,27 @@ Scheduler::Scheduler()
 Scheduler::~Scheduler()
 {
     // lock mutex so no thread can sleep between the close worker value change and the notify all
-    m_mutex.lock();
-    m_closeWorkers.store(true);
-    m_mutex.unlock();
+    {
+        std::unique_lock<std::mutex> lck(m_mutex);
+        m_closeWorkers.store(true);
+    }
 
     m_conditionVariable.notify_all();
 
-    // we can't call delete on impl until all the worker threads have been signaled that they
-    // should shutdown and woken up
+    // this function will block until all of the worker threads have been confirmed to be shutdown
+    m_impl->ShutdownWorkerThreads();
+
     delete m_impl;
+    m_impl = nullptr;
 
     delete m_fiberPool;
+    m_fiberPool = nullptr;
 
     if (m_workerStorage != nullptr)
     {
         delete[] m_workerStorage;
+        m_workerStorage = nullptr;
     }
-}
-
-void FiberStart(kiwi::Scheduler* scheduler, kiwi::FiberWorkerStorage* storage, kiwi::Fiber* fiber)
-{
-    fiber->m_job.m_function(scheduler, fiber->m_job.m_arg);
-
-    // return fiber to pool
-    storage->m_fiberPool->ReturnFiber(fiber);
-
-    // return to fiber worker main function
-    scheduler->GetImpl()->SetContext(&storage->m_context);
-}
-
-void* FiberWorkerThreadMain(void* arg)
-{
-    FiberWorkerStorage* storage = reinterpret_cast<FiberWorkerStorage*>(arg);
-    SchedulerImpl* schedulerImpl = storage->m_scheduler->GetImpl();
-    
-    storage->m_context = {0};
-    schedulerImpl->GetContext(&storage->m_context);
-
-    while (!storage->m_closeWorker->load())
-    {          
-        Fiber* fiber = nullptr;  
-        if (storage->GetOrWaitForNextFiber(&fiber))
-        {
-            fiber->m_context = {0};
-
-            char* stackPointer = schedulerImpl->GetStackPointerForStackBuffer(fiber->m_stack);
-            schedulerImpl->SetContextInstructionAndStack(&fiber->m_context, (void*)FiberStart, (void*)stackPointer);
-            schedulerImpl->SetContextParameters(&fiber->m_context, storage->m_scheduler, storage, fiber);
-            
-            schedulerImpl->SetContext(&fiber->m_context);
-        }
-    }
-
-    return 0;
 }
 
 void Scheduler::Init()
@@ -111,13 +76,18 @@ void Scheduler::Init()
         {
             threadNameBuffer[threadNameMaxSize - 1] = '\0';
         }
-        m_impl->CreateThread(threadNameBuffer, i, FiberWorkerThreadMain, storage); 
+        m_impl->CreateThread(threadNameBuffer, i, kiwi::FiberWorkerThreadMain, this); 
     }
 }
 
 SchedulerImpl* Scheduler::GetImpl()
 {
     return m_impl;
+}
+
+FiberWorkerStorage* Scheduler::GetFiberWorkerStorage()
+{
+    return &m_workerStorage[m_impl->GetWorkerThreadIndex()];
 }
 
 void Scheduler::AddJob(const Job* job, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)
@@ -127,13 +97,16 @@ void Scheduler::AddJob(const Job* job, const JobPriority priority /*= JobPriorit
 
 void Scheduler::AddJob(const Job* jobs, const uint32_t size, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)
 {
+    m_queueLock.Lock();
+
+    bool queuesEmpty = m_queueHigh.IsEmpty() && m_queueNormal.IsEmpty() && m_queueLow.IsEmpty();
+
     for (uint32_t i = 0; i < size; ++i)
     {
         PendingJob pendingJob;
         pendingJob.m_job = jobs[i]; 
-        pendingJob.m_counter = counter;
-
-        m_queueLock.Lock();
+        pendingJob.m_counter = counter;                
+        
         switch (priority)
         {
         case JobPriority::High:
@@ -148,7 +121,20 @@ void Scheduler::AddJob(const Job* jobs, const uint32_t size, const JobPriority p
         default:
             assert(!"unsupported job priority");
             break;    
+        }        
+    }
+
+    m_queueLock.Unlock();
+
+    if (queuesEmpty)
+    {
+        if (size > 0)
+        {
+            m_conditionVariable.notify_one();
         }
-        m_queueLock.Unlock();
+        else
+        {
+            m_conditionVariable.notify_all();
+        }
     }
 }

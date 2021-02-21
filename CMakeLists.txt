@@ -22,6 +22,8 @@ set(kiwi-tasker-src
     "include/kiwi/Config.h"
     "include/kiwi/Queue.h"
     "include/kiwi/FiberPool.h"
+    "include/kiwi/FiberWorkerThreadMain.h"
+    "include/kiwi/SchedulerImpl.h"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
@@ -29,10 +31,11 @@ set(kiwi-tasker-src ${kiwi-tasker-src}
     "src/Counter.cpp"
     "src/FiberPool.cpp"
     "src/FiberWorkerStorage.cpp"
+    "src/FiberWorkerThreadMain.cpp"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
-    "src/SchedulerImpl_unix.h"
+    "include/kiwi/SchedulerImpl_unix.h"
     "src/SchedulerImpl_unix.cpp"
 )
 

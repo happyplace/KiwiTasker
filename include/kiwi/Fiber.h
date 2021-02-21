@@ -1,5 +1,6 @@
 #pragma once
 
+#include "kiwi/Config.h"
 #include "kiwi/Context.h"
 #include "kiwi/Job.h"
 
@@ -9,9 +10,9 @@ class Counter;
 
 struct Fiber
 {
-    char m_stack[4096];
-    kiwi::Context m_context;
-    kiwi::Job m_job;
+    char m_stack[KiwiConfig::fiberSmallStackSize];
+    kiwi::Context m_context = {0};
+    kiwi::Job m_job = {0};
     union
     {
         kiwi::Counter* m_counter = nullptr;

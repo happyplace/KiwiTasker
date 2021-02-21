@@ -44,6 +44,8 @@ public:
 
     SchedulerImpl* GetImpl();
 
+    FiberWorkerStorage* GetFiberWorkerStorage();
+
 private:
     SchedulerImpl* m_impl = nullptr;
     FiberWorkerStorage* m_workerStorage = nullptr;

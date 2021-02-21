@@ -49,14 +49,14 @@ bool FiberWorkerStorage::GetOrWaitForNextFiber(kiwi::Fiber** outFiber)
 
         if (!haveJob)
         {
-            std::unique_lock<std::mutex> lock(*m_mutex);
+            //std::unique_lock<std::mutex> lock(*m_mutex);
             // if the workers are suppose to close just return nullptr
             // the worker thread will handle shuting down
-            if (m_closeWorker->load())
+            //if (m_closeWorker->load())
             {
-                return false;
+                //return false;
             }
-            m_conditionVariable->wait(lock);
+            //m_conditionVariable->wait(lock);
         }
     }
     

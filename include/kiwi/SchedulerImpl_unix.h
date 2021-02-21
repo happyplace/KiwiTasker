@@ -19,8 +19,14 @@ public:
 
     int32_t GetCPUCount() const; 
 
+    // returns the index of the current worker thread.
+    // THIS SHOULD ONLY BE CALLED FROM WORKER THREADS
+    int32_t GetWorkerThreadIndex() const;
+
     void CreateThread(const char* threadName, int32_t threadAffinity, void *(*threadFunction) (void *), void* threadFunctionArg);
     
+    void ShutdownWorkerThreads();
+
     // should be called on worker threads after the thread is created
     void BlockSignalsOnThread();
 
@@ -28,9 +34,6 @@ public:
     void SetContextParameters(Context* context, void* param0, void* param1, void* param2) const;
 
     char* GetStackPointerForStackBuffer(char* stackBuffer) const;
-
-    void SetContext(Context* context) const;
-    void GetContext(Context* context) const;
 
 private:
     pthread_t* m_workerThreadIds;

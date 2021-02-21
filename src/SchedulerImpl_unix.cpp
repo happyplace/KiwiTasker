@@ -1,4 +1,4 @@
-#include "SchedulerImpl_unix.h"
+#include "kiwi/SchedulerImpl_unix.h"
 
 #include <assert.h>
 
@@ -19,74 +19,28 @@
 }
 #endif // PTRD_ERR_HNDLR(x)
 
-// assembled version of get_context_linux.s
-// this needs to be manually updated if the contents of get_context_linux.s changes
-__attribute__((section(".text#")))
-static unsigned char get_context_code[] = {
-#if defined(__x86_64__)
-    0x4c, 0x8b, 0x04, 0x24,
-    0x4c, 0x89, 0x07,
-    0x4c, 0x8d, 0x44, 0x24, 0x08,
-    0x4c, 0x89, 0x47, 0x08,
-    0x48, 0x89, 0x57, 0x10,
-    0x48, 0x89, 0x6f, 0x18,
-    0x4c, 0x89, 0x67, 0x20,
-    0x4c, 0x89, 0x6f, 0x28,
-    0x4c, 0x89, 0x77, 0x30,
-    0x4c, 0x89, 0x7f, 0x38,
-    0x31, 0xc0,
-    0xc3
-#else
-#error get context does not exist for your cpu architecture
-#endif
-};
-
-// assembed version of set_context_linux.s
-// this needs to be manually updated if the contents of set_context_linux.s changes
-__attribute__((section(".text#")))
-static unsigned char set_context_code[] = {
-#if defined(__x86_64__)
-    0x4c, 0x8b, 0x07,
-    0x48, 0x8b, 0x67, 0x08,
-    0x48, 0x8b, 0x5f, 0x10,
-    0x48, 0x8b, 0x6f, 0x18,
-    0x4c, 0x8b, 0x67, 0x20,
-    0x4c, 0x8b, 0x6f, 0x28,
-    0x4c, 0x8b, 0x77, 0x30,
-    0x4c, 0x8b, 0x7f, 0x38,
-    0x41, 0x50,
-    0x48, 0x8b, 0x77, 0x48,
-    0x48, 0x8b, 0x57, 0x50,
-    0x48, 0x8b, 0x7f, 0x40,
-    0x31, 0xc0,
-    0xc3
-#else
-#error set context does not exist for your cpu architecture
-#endif
-};
-
-static void (*get_context)(kiwi::Context*) = (void (*)(kiwi::Context*))get_context_code;
-static void (*set_context)(kiwi::Context*) = (void (*)(kiwi::Context*))set_context_code;
-
 using namespace kiwi;
 
 SchedulerImpl::SchedulerImpl()
 {
     cpu_set_t cpuset;
     sched_getaffinity(0, sizeof(cpuset), &cpuset);
-    m_workerThreadIdCount = static_cast<int32_t>(CPU_COUNT(&cpuset));
+    m_workerThreadIdCount = 1;//static_cast<int32_t>(CPU_COUNT(&cpuset));
 
     m_workerThreadIds = new pthread_t[m_workerThreadIdCount];    
 }
 
 SchedulerImpl::~SchedulerImpl()
 {
+    delete[] m_workerThreadIds;
+}
+
+void SchedulerImpl::ShutdownWorkerThreads()
+{
     for (int32_t i = 0; i < m_workerThreadIdCount; ++i)
     {
         PTRD_ERR_HNDLR(pthread_join(m_workerThreadIds[i], NULL));
     }
-    delete[] m_workerThreadIds;
-    m_workerThreadIds = nullptr;
 }
 
 int32_t SchedulerImpl::GetCPUCount() const
@@ -106,7 +60,6 @@ int32_t SchedulerImpl::GetWorkerThreadIndex() const
         return -1;
     }
 
-    int cpuIndex = -1;
     for (int i = 0; i < CPU_SETSIZE; i++)
     {
         if (CPU_ISSET(i, &cpuset))
@@ -131,7 +84,7 @@ void SchedulerImpl::CreateThread(const char* threadName, int32_t threadAffinity,
 
     PTRD_ERR_HNDLR(pthread_create(&m_workerThreadIds[threadAffinity], &attr, threadFunction, threadFunctionArg));
 
-    pthread_attr_destroy(&attr);
+    PTRD_ERR_HNDLR(pthread_create(&m_workerThreadIds[threadAffinity], &attr, threadFunction, threadFunctionArg));
 
     PTRD_ERR_HNDLR(pthread_setname_np(m_workerThreadIds[threadAffinity], threadName));
 }
@@ -179,14 +132,4 @@ char* SchedulerImpl::GetStackPointerForStackBuffer(char* stackBuffer) const
 #error GetStackPointerForStack does not exist for your cpu architecture
 return NULL;
 #endif
-}
-
-void SchedulerImpl::SetContext(Context* context) const
-{
-    set_context(context);
-}
-
-void SchedulerImpl::GetContext(Context* context) const
-{
-    get_context(context);
 }

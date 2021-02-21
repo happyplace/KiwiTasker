@@ -16,21 +16,21 @@ Counter::~Counter()
 
 void Counter::CheckWaiting()
 {
-    for (WaitingFiber& waitingFiber : m_waitingFibers)
-    {
-        if (waitingFiber.m_value == m_value)
-        {
-            for (std::size_t i = 0; i < m_scheduler->m_waitList.size(); ++i)
-            {
-                if (m_scheduler->m_waitList[i] == waitingFiber.m_fiber)
-                {
-                    m_scheduler->m_waitList.erase(m_scheduler->m_waitList.begin() + i);
-                    m_scheduler->m_readyList.push_back(waitingFiber.m_fiber);                        
-                    --i;
-                }
-            }
-            return;
-            // remove from waiting list, put back in list                
-        }
-    }
+    // for (WaitingFiber& waitingFiber : m_waitingFibers)
+    // {
+    //     if (waitingFiber.m_value == m_value)
+    //     {
+    //         for (std::size_t i = 0; i < m_scheduler->m_waitList.size(); ++i)
+    //         {
+    //             if (m_scheduler->m_waitList[i] == waitingFiber.m_fiber)
+    //             {
+    //                 m_scheduler->m_waitList.erase(m_scheduler->m_waitList.begin() + i);
+    //                 m_scheduler->m_readyList.push_back(waitingFiber.m_fiber);                        
+    //                 --i;
+    //             }
+    //         }
+    //         return;
+    //         // remove from waiting list, put back in list                
+    //     }
+    // }
 }
