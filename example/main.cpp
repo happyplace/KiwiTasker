@@ -149,11 +149,11 @@ struct Context {
 #include <signal.h>
 #include <bits/pthreadtypes.h>
 
-static void (*get_context)(Context*) = (void (*)(Context*))get_context_code;
+static void (*get_context)(Context* context) = (void (*)(Context*))get_context_code;
 
-static void (*set_context)(Context*) = (void (*)(Context*))set_context_code;
+static void (*set_context)(Context* context) = (void (*)(Context*))set_context_code;
 
-static void (*swap_context)(Context*, Context*) = (void (*)(Context*,Context*))swap_context_code;
+static void (*swap_context)(Context* oldContext, Context* newContext) = (void (*)(Context*,Context*))swap_context_code;
 
 #include <mutex>
 #include <condition_variable>
