@@ -5,7 +5,7 @@ cmake_policy(SET CMP0079 NEW)
 project(kiwi-example)
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    set(CMAKE_CXX_FLAGS "-Wall -Werror")
+    set(CMAKE_CXX_FLAGS "-Wall -fpermissive")
 endif()
 
 include_directories(../include)
