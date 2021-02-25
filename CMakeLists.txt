@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.0)
 project(KiwiTasker)
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    set(CMAKE_CXX_FLAGS "-Wall -fpermissive")
+    set(CMAKE_CXX_FLAGS "-Wall -Werror")
 endif()
 
 include_directories(include)

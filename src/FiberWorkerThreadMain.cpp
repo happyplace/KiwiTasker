@@ -85,11 +85,11 @@ void* kiwi::FiberWorkerThreadMain(void* arg)
         Fiber* fiber = nullptr;  
         if (storage->GetOrWaitForNextFiber(&fiber))
         {
-            char* stackPointer = schedulerImpl->GetStackPointerForStackBuffer(fiber->m_stack);
-            schedulerImpl->SetContextInstructionAndStack(&fiber->m_context, (void*)FiberStart, (void*)stackPointer);
-            schedulerImpl->SetContextParameters(&fiber->m_context, scheduler, fiber, nullptr);
+            //char* stackPointer = schedulerImpl->GetStackPointerForStackBuffer(fiber->m_stack);
+            //schedulerImpl->SetContextInstructionAndStack(&fiber->m_context, (void*)FiberStart, (void*)stackPointer);
+            //schedulerImpl->SetContextParameters(&fiber->m_context, scheduler, fiber, nullptr);
             
-            set_context(&fiber->m_context); 
+            //set_context(&fiber->m_context); 
 
             assert(!"should never get here");
         }

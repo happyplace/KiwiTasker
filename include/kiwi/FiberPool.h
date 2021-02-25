@@ -11,7 +11,7 @@ namespace kiwi
 class FiberPool
 {
 public:
-    FiberPool(int32_t poolSize);
+    explicit FiberPool(int32_t poolSize);
     ~FiberPool();
 
     FiberPool(const FiberPool&) = delete;

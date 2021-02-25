@@ -31,6 +31,8 @@ FiberPool::FiberPool(int32_t poolSize)
     }
 }
 
+#include <iostream>
+
 FiberPool::~FiberPool()
 {
 #ifdef KIWI_FIBERPOOL_DYNAMIC_MODE
@@ -116,7 +118,7 @@ Fiber* FiberPool::GetFiber()
 void FiberPool::ReturnFiber(Fiber* fiber)
 {
 #ifdef KIWI_FIBERPOOL_ERROR_CHECKING
-    assert(fiber && "trying to release a null fiber");
+    assert(fiber != nullptr && "trying to release a null fiber");
 #endif // KIWI_FIBERPOOL_ERROR_CHECKING
 
     m_lock.Lock();

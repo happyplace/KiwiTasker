@@ -10,7 +10,7 @@ class Counter;
 
 struct Fiber
 {
-    char m_stack[KiwiConfig::fiberSmallStackSize];
+    char* m_stack[KiwiConfig::fiberSmallStackSize];
     kiwi::Context m_context = {0};
     kiwi::Job m_job = {0};
     union

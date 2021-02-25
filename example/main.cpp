@@ -2,7 +2,7 @@
 
 // #include <atomic>
 
-// #include <unistd.h>
+#include <unistd.h>
 
 // #include "kiwi/Job.h"
 // #include "kiwi/Scheduler.h"
@@ -157,15 +157,12 @@ static void (*swap_context)(Context* oldContext, Context* newContext) = (void (*
 
 #include <mutex>
 #include <condition_variable>
-#include <queue>
 #include <atomic>
 
-constexpr uint32_t stackSize = 512;
-
-struct Fiber
-{
-    char* stackBuffer[stackSize];
-};
+#include "kiwi/FiberPool.h"
+#include "kiwi/Fiber.h"
+#include "kiwi/Queue.h"
+#include "kiwi/SpinLock.h"
 
 struct Jobs
 {
@@ -173,15 +170,17 @@ struct Jobs
 
     JobFunc m_function;
     void* m_arg;
-    Fiber* m_fiber; 
+    kiwi::Fiber* m_fiber; 
 };
 
 struct WorkerData
 {
-    std::queue<Jobs>* m_queue;
+    kiwi::SpinLock* m_queueLock;
+    kiwi::Queue<Jobs>* m_queue;
     std::condition_variable* m_cv;
     std::mutex* m_m;
     std::atomic_bool* m_exit;
+    kiwi::FiberPool* m_fiberPool;
 };
 
 struct JobArg
@@ -199,12 +198,106 @@ void FiberStart(Jobs* job, Context* returnContext)
     assert(!"We should never get here");
 }
 
+static kiwi::SpinLock lock;
+
+int32_t GetWorkerThreadIndex()
+{
+    pthread_t thread = pthread_self();
+
+    cpu_set_t cpuset;
+    int result = pthread_getaffinity_np(thread, sizeof(cpuset), &cpuset);
+    if (result != 0)
+    {
+        assert(false);
+        return -1;
+    }
+
+    for (int i = 0; i < CPU_SETSIZE; i++)
+    {
+        if (CPU_ISSET(i, &cpuset))
+        {
+            // assuming this is called from a worker thread, only one cpu should be set so we can return on the first true
+            return i;
+        }
+    }
+
+    return -1;
+}
+
 void GotHere(void* arg)
 {
     JobArg* line = reinterpret_cast<JobArg*>(arg);
 
-    printf("hello there\n");
+    lock.Lock();
+    printf("hello there %i\n", GetWorkerThreadIndex());
     printf("%s\n", line->message);
+    lock.Unlock();
+}
+
+void TheOtherHere(void* arg)
+{
+    lock.Lock();
+    printf("The Other here %i\n", GetWorkerThreadIndex());
+    lock.Unlock();
+}
+
+struct CounterTaskData
+{
+    kiwi::SpinLock* m_queueLock;
+    kiwi::Queue<Jobs>* m_queue;
+    kiwi::FiberPool* fiberPool;
+    std::condition_variable* m_cv;
+};
+
+struct NumberData
+{
+    int32_t num;
+};
+
+void PrintNumberTask(void* arg)
+{
+    NumberData* num = reinterpret_cast<NumberData*>(arg);
+
+    sleep(1); // super bad, but we want this task to take awhile so we can test counters
+
+    lock.Lock();
+    printf("PrintNumberTask: %i CPU: %i\n", num->num, GetWorkerThreadIndex());
+    lock.Unlock();
+}
+
+void CounterTask(void* arg)
+{
+    CounterTaskData* data = reinterpret_cast<CounterTaskData*>(arg);
+
+    lock.Lock();
+    printf("Entered Counter Task %i\n", GetWorkerThreadIndex());
+    lock.Unlock();
+
+    NumberData* nums = new NumberData[25];
+    Jobs* jobs = new Jobs[25];
+
+    for (int i = 0; i < 25; ++i)
+    {
+        nums[i].num = i;
+        jobs[i] = { PrintNumberTask, &nums[i], data->fiberPool->GetFiber() };
+    }
+
+    data->m_queueLock->Lock();
+    for (int i = 0; i < 25; ++i)
+    {
+        data->m_queue->Push(jobs[i]);
+    }
+    data->m_queueLock->Unlock();
+
+    data->m_cv->notify_all();
+
+    delete[] jobs;
+
+    lock.Lock();
+    printf("Resumed because Counter finished %i\n", GetWorkerThreadIndex());
+    lock.Unlock();
+
+    //delete[] nums;
 }
 
 // void FiberStart(Scheduler* scheduler, kiwi::Fiber* fiber)
@@ -236,21 +329,58 @@ void* worker_thread_entry(void* arg)
 
     while (!data->m_exit->load())
     {
-        std::unique_lock<std::mutex> lck(*data->m_m);
-        if (data->m_queue->empty())
+        //ck_barrier_mcs_subscribe(&barrier, &state);
+
+        //ck_pr_inc_int(&barrier_wait);
+        // if the queue is empty stall until it's ready
+        //while (ck_pr_load_int(&barrier_wait) != 1)
+        //{
+        //    ck_pr_stall();
+        //}
+
+        //if (data->m_exit->load())
+        //{
+        //    break;
+        //}
+
+        //Jobs job = data->m_queue->front();
+        //data->m_queue->pop();
+
+        //lck.unlock();
+
+        bool hasNode = false;
+        //JobsQueueNode* node = nullptr;
+
+        // ck_spinlock_fas_lock(data->m_queueLock);   
+        // hasNode = !CK_STAILQ_EMPTY(data->m_queue);
+        // if (hasNode)
+        // {
+        //     node = CK_STAILQ_FIRST(data->m_queue);
+        //     CK_STAILQ_REMOVE_HEAD(data->m_queue, list_entry);
+        // }
+        // ck_spinlock_fas_unlock(data->m_queueLock);
+
+        data->m_queueLock->Lock();
+        Jobs node;
+        hasNode = data->m_queue->TryGetAndPopFront(&node);
+        data->m_queueLock->Unlock();
+
+        if (!hasNode)
         {
-            data->m_cv->wait(lck, [&data] { return !data->m_queue->empty() || data->m_exit->load(); });
+            std::unique_lock<std::mutex> lck(*data->m_m);
+            data->m_cv->wait(lck, [&data]
+            {
+                data->m_queueLock->Lock();
+                const bool queueEmpty = data->m_queue->IsEmpty();
+                data->m_queueLock->Unlock();
+
+                return data->m_exit->load() || !queueEmpty;
+            });
+            
+            // return to the start of the loop so we can check if we should shutdown the worker, check for new jobs, or go back
+            // to sleep because some other worker got the task before we could
+            continue;
         }
-
-        if (data->m_exit->load())
-        {
-            break;
-        }
-
-        Jobs job = data->m_queue->front();
-        data->m_queue->pop();
-
-        lck.unlock();
 
         volatile bool returningFromJob = false;
         
@@ -263,7 +393,10 @@ void* worker_thread_entry(void* arg)
             returningFromJob = true;
 
             //char *sp = (char*)(stackBuffer + sizeof(stackBuffer));
-            char *sp = (char*)(job.m_fiber->stackBuffer + stackSize);
+            //char* address = node.m_fiber->m_stack;
+            //(void)address;
+
+            char *sp = (char*)(node.m_fiber->m_stack + KiwiConfig::fiberSmallStackSize);
 
             // Align stack pointer on 16-byte boundary.
             sp = (char*)((uintptr_t)sp & -16L);
@@ -276,12 +409,12 @@ void* worker_thread_entry(void* arg)
             Context funcJmp = {0};
             funcJmp.rip = (void*)FiberStart;
             funcJmp.rsp = (void*)sp;
-            funcJmp.rdi = (void*)&job; 
+            funcJmp.rdi = (void*)&node; 
             funcJmp.rsi = (void*)&main;
 
 #if defined(KIWI_HAS_VALGRIND)
             // Before context switch, register our stack with Valgrind.
-            unsigned stack_id = VALGRIND_STACK_REGISTER(job.m_fiber->stackBuffer, job.m_fiber->stackBuffer + stackSize);
+            unsigned stack_id = VALGRIND_STACK_REGISTER(node.m_fiber->m_stack, node.m_fiber->m_stack + KiwiConfig::fiberSmallStackSize);
 #endif
 
             swap_context(&main, &funcJmp);
@@ -290,6 +423,9 @@ void* worker_thread_entry(void* arg)
             // We've returned from the context switch, we can now throw that stack out.
             VALGRIND_STACK_DEREGISTER(stack_id);
 #endif
+
+            // return node to the pool
+            // return fiber to the pool
         }
     }
 
@@ -300,27 +436,65 @@ const char* message = "General Kenobi";
 
 int main(int /*argc*/, char** /*argv*/)
 {
-    std::queue<Jobs> queue;
     std::condition_variable cv;
     std::mutex m;
     std::atomic_bool exit = ATOMIC_VAR_INIT(false);
 
-    Fiber* fibers = new Fiber[1];
+    kiwi::FiberPool* fiberPool = new kiwi::FiberPool(100);
 
+    kiwi::SpinLock queueLock;
+    kiwi::Queue<Jobs> queue(100);
+
+    Jobs jobs[3];
+    
     JobArg arg;
     arg.message = message;
 
-    Jobs job = {0};
-    job.m_arg = &arg;
-    job.m_function = GotHere;
-    job.m_fiber = &fibers[0];
-    queue.push(std::move(job));
+    jobs[0].m_arg = &arg;
+    jobs[0].m_function = GotHere;
+    jobs[0].m_fiber = fiberPool->GetFiber();
+
+    jobs[1].m_arg = nullptr;
+    jobs[1].m_function = TheOtherHere;
+    jobs[1].m_fiber = fiberPool->GetFiber();
+
+    CounterTaskData counterTaskData;
+    counterTaskData.fiberPool = fiberPool;
+    counterTaskData.m_queueLock = &queueLock;
+    counterTaskData.m_queue = &queue;
+    counterTaskData.m_cv = &cv;
+
+    jobs[2].m_arg = &counterTaskData;
+    jobs[2].m_function = CounterTask;
+    jobs[2].m_fiber = fiberPool->GetFiber();
+
+    // JobsQueueNode node[2];
+    // node[0].data.m_arg = &arg;
+    // node[0].data.m_function = GotHere;
+    // node[0].data.m_fiber = &fibers[0];
+
+    // node[1].data.m_arg = nullptr;
+    // node[1].data.m_function = TheOtherHere;
+    // node[1].data.m_fiber = &fibers[1];
+
+    // ck_spinlock_fas queueLock = CK_SPINLOCK_FAS_INITIALIZER;
+    // ck_spinlock_fas_init(&queueLock);
+
+    // ck_spinlock_fas_lock(&queueLock);
+    // CK_STAILQ_INSERT_TAIL(&jobQueue, &node[0], list_entry);
+    // ck_spinlock_fas_unlock(&queueLock);
+    
+    // ck_spinlock_fas_lock(&queueLock);
+    // CK_STAILQ_INSERT_TAIL(&jobQueue, &node[1], list_entry);
+    // ck_spinlock_fas_unlock(&queueLock);
 
     WorkerData workerData; //= new WorkerData();
     workerData.m_queue = &queue;
+    workerData.m_queueLock = &queueLock;
     workerData.m_cv = &cv;
     workerData.m_m = &m;
     workerData.m_exit = &exit;
+    workerData.m_fiberPool = fiberPool;
 
     cpu_set_t cpuset;
     sched_getaffinity(0, sizeof(cpuset), &cpuset);
@@ -344,6 +518,15 @@ int main(int /*argc*/, char** /*argv*/)
 
         PTRD_ERR_HNDLR(pthread_attr_destroy(&attr));
     }
+
+    queueLock.Lock();
+    queue.Push(jobs[0]);
+    queue.Push(jobs[1]);  
+    queue.Push(jobs[2]);    
+    queueLock.Unlock();
+
+    cv.notify_all();
+
     //volatile int x = 0;
 
     //char *sp = (char*)(stackBuffer + sizeof(stackBuffer));
@@ -373,11 +556,11 @@ int main(int /*argc*/, char** /*argv*/)
     //     set_context(&funcJmp);
     // }
 
+    sleep(2);
+
     exit.store(true);
 
-    std::unique_lock<std::mutex> lck(m);
     cv.notify_all();
-    lck.unlock();
 
     for (int32_t i = 0; i < cpuCount; ++i)
     {
@@ -386,7 +569,7 @@ int main(int /*argc*/, char** /*argv*/)
 
     delete[] workerThreads;
 
-    delete[] fibers;
+    delete fiberPool;
 
     return 0;
 }
