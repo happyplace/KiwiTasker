@@ -4,10 +4,10 @@
 #include "kiwi/Context.h"
 #include "kiwi/Job.h"
 
-namespace kiwi
-{
 class Counter;
 
+namespace kiwi
+{
 struct Fiber
 {
     char* m_stack[KiwiConfig::fiberSmallStackSize];
@@ -15,9 +15,9 @@ struct Fiber
     kiwi::Job m_job = {0};
     union
     {
-        kiwi::Counter* m_counter = nullptr;
+        Counter* m_counter = nullptr;
         
-        // used by fiber pool
+        // used by fiber pool and counters
         Fiber* next_;
     };    
 };

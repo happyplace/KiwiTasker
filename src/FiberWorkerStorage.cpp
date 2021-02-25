@@ -42,7 +42,7 @@ bool FiberWorkerStorage::GetOrWaitForNextFiber(kiwi::Fiber** outFiber)
             else
             {
                 (*outFiber)->m_job = pendingJob.m_job;
-                (*outFiber)->m_counter = pendingJob.m_counter;
+                //(*outFiber)->m_counter = pendingJob.m_counter;
                 return true;
             }
         }

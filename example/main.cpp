@@ -123,12 +123,6 @@ static unsigned char swap_context_code[] = {
     0xc3
 };
 
-struct Context {
-    void *rip, *rsp;
-    void *rbx, *rbp, *r12, *r13, *r14, *r15;
-    void *rdi, *rsi, *rdx;
-};
-
 #include <assert.h>
 
 #ifndef PTRD_ERR_HNDLR
@@ -149,20 +143,101 @@ struct Context {
 #include <signal.h>
 #include <bits/pthreadtypes.h>
 
-static void (*get_context)(Context* context) = (void (*)(Context*))get_context_code;
+#include "kiwi/Context.h"
 
-static void (*set_context)(Context* context) = (void (*)(Context*))set_context_code;
+static void (*get_context)(kiwi::Context* context) = (void (*)(kiwi::Context*))get_context_code;
 
-static void (*swap_context)(Context* oldContext, Context* newContext) = (void (*)(Context*,Context*))swap_context_code;
+static void (*set_context)(kiwi::Context* context) = (void (*)(kiwi::Context*))set_context_code;
+
+static void (*swap_context)(kiwi::Context* oldContext, kiwi::Context* newContext) = (void (*)(kiwi::Context*,kiwi::Context*))swap_context_code;
 
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <inttypes.h>
+
+#include <list>
 
 #include "kiwi/FiberPool.h"
 #include "kiwi/Fiber.h"
 #include "kiwi/Queue.h"
 #include "kiwi/SpinLock.h"
+
+class Counter;
+
+struct WaitingFiber
+{
+    kiwi::Fiber* m_fiber;
+    Counter* m_counter;
+    uint64_t m_value;
+};
+
+static kiwi::SpinLock m_waitingFibersLock;
+static std::list<WaitingFiber> m_waitingFibers;
+static kiwi::Queue<kiwi::Fiber*> m_readyFibers(100);
+
+static kiwi::SpinLock queueLock;
+
+
+static kiwi::SpinLock lock;
+
+class Counter
+{
+public:
+    
+    Counter()
+    {
+        m_value.store(0);
+    }
+
+    ~Counter()
+    {
+
+    }
+
+    void Increment()
+    {
+        m_lock.Lock();
+        uint64_t value = m_value.fetch_add(1);
+        value++; // we're getting the value before we increment so we need to add 1 to get the value we changed the atomic to        
+        CheckWaitingFibers(value);
+        m_lock.Unlock();
+    }
+
+    void Decrement()
+    {
+        m_lock.Lock();
+        uint64_t value = m_value.fetch_sub(1);
+        value--; // we're getting the value before we decrement so we need to subtract 1 to get the value we changed the atomic to
+        CheckWaitingFibers(value);
+        m_lock.Unlock();
+    }
+
+    void CheckWaitingFibers(uint64_t value)
+    {
+        m_waitingFibersLock.Lock();
+        std::list<WaitingFiber>::iterator i = m_waitingFibers.begin();
+        while (i != m_waitingFibers.end())
+        {
+            if (i->m_counter == this && i->m_value == value)
+            {
+                queueLock.Lock();
+                m_readyFibers.Push(i->m_fiber);
+                queueLock.Unlock();
+
+                i = m_waitingFibers.erase(i);                                
+            }
+            else
+            {
+                ++i;
+            }
+        }
+        m_waitingFibersLock.Unlock();
+    }
+
+    kiwi::SpinLock m_lock;
+    std::atomic<uint64_t> m_value;
+};
 
 struct Jobs
 {
@@ -183,12 +258,26 @@ struct WorkerData
     kiwi::FiberPool* m_fiberPool;
 };
 
+static kiwi::Context* workerMainContext = nullptr;
+
+static std::mutex endProgMutex;
+static std::condition_variable endProgCv;
+
+void EndProgramJob(void* arg)
+{
+    endProgCv.notify_all();
+
+    lock.Lock();
+    printf("EndProgramJob\n");
+    lock.Unlock();
+}
+
 struct JobArg
 {
     const char* message;
 };
 
-void FiberStart(Jobs* job, Context* returnContext)
+void FiberStart(Jobs* job, kiwi::Context* returnContext)
 {
     job->m_function(job->m_arg);
 
@@ -197,8 +286,6 @@ void FiberStart(Jobs* job, Context* returnContext)
 
     assert(!"We should never get here");
 }
-
-static kiwi::SpinLock lock;
 
 int32_t GetWorkerThreadIndex()
 {
@@ -247,6 +334,7 @@ struct CounterTaskData
     kiwi::Queue<Jobs>* m_queue;
     kiwi::FiberPool* fiberPool;
     std::condition_variable* m_cv;
+    kiwi::Fiber* m_fiber;
 };
 
 struct NumberData
@@ -263,6 +351,36 @@ void PrintNumberTask(void* arg)
     lock.Lock();
     printf("PrintNumberTask: %i CPU: %i\n", num->num, GetWorkerThreadIndex());
     lock.Unlock();
+}
+
+void WaitForCounter(Counter* counter, uint64_t value, kiwi::Fiber* fiber)
+{
+    WaitingFiber waitingFiber;
+    waitingFiber.m_counter = counter;
+    waitingFiber.m_value = value;
+    waitingFiber.m_fiber = fiber;
+
+    volatile bool waiting = false;
+
+    get_context(&fiber->m_context);
+
+    if (!waiting)
+    {
+        counter->m_lock.Lock();
+        if (value != counter->m_value.load())
+        {
+            m_waitingFibersLock.Lock();
+            m_waitingFibers.push_back(waitingFiber);            
+            m_waitingFibersLock.Unlock();
+        }
+        counter->m_lock.Unlock();
+    }
+
+    if (!waiting)
+    {
+        waiting = true;
+        set_context(&workerMainContext[GetWorkerThreadIndex()]);
+    }
 }
 
 void CounterTask(void* arg)
@@ -282,9 +400,13 @@ void CounterTask(void* arg)
         jobs[i] = { PrintNumberTask, &nums[i], data->fiberPool->GetFiber() };
     }
 
+    Counter counter;
+
     data->m_queueLock->Lock();
     for (int i = 0; i < 25; ++i)
     {
+        counter.Increment();
+        jobs[i].m_fiber->m_counter = &counter;
         data->m_queue->Push(jobs[i]);
     }
     data->m_queueLock->Unlock();
@@ -293,9 +415,18 @@ void CounterTask(void* arg)
 
     delete[] jobs;
 
+    WaitForCounter(&counter, 0, data->m_fiber);
+
     lock.Lock();
     printf("Resumed because Counter finished %i\n", GetWorkerThreadIndex());
     lock.Unlock();
+
+    {
+        Jobs job = { EndProgramJob, nullptr, data->fiberPool->GetFiber() };
+        data->m_queueLock->Lock();
+        data->m_queue->Push(job);
+        data->m_queueLock->Unlock();
+    }
 
     //delete[] nums;
 }
@@ -360,10 +491,22 @@ void* worker_thread_entry(void* arg)
         // }
         // ck_spinlock_fas_unlock(data->m_queueLock);
 
-        data->m_queueLock->Lock();
         Jobs node;
-        hasNode = data->m_queue->TryGetAndPopFront(&node);
+
+        data->m_queueLock->Lock();
+        kiwi::Fiber* fiber;
+        bool hasFiber = m_readyFibers.TryGetAndPopFront(&fiber);
+        if (!hasFiber)
+        {
+            hasNode = data->m_queue->TryGetAndPopFront(&node);
+        }
         data->m_queueLock->Unlock();
+
+        if (hasFiber)
+        {
+            // resume fiber
+            set_context(&fiber->m_context);
+        }
 
         if (!hasNode)
         {
@@ -371,7 +514,7 @@ void* worker_thread_entry(void* arg)
             data->m_cv->wait(lck, [&data]
             {
                 data->m_queueLock->Lock();
-                const bool queueEmpty = data->m_queue->IsEmpty();
+                const bool queueEmpty = data->m_queue->IsEmpty() && m_readyFibers.IsEmpty();
                 data->m_queueLock->Unlock();
 
                 return data->m_exit->load() || !queueEmpty;
@@ -383,9 +526,8 @@ void* worker_thread_entry(void* arg)
         }
 
         volatile bool returningFromJob = false;
-        
-        Context main = {0};
-        get_context(&main);
+                
+        get_context(&workerMainContext[GetWorkerThreadIndex()]);
 
         if (!returningFromJob)
         {
@@ -406,23 +548,28 @@ void* worker_thread_entry(void* arg)
             // 16-byte aligned.
             sp -= 128;
 
-            Context funcJmp = {0};
+            kiwi::Context funcJmp = {0};
             funcJmp.rip = (void*)FiberStart;
             funcJmp.rsp = (void*)sp;
             funcJmp.rdi = (void*)&node; 
-            funcJmp.rsi = (void*)&main;
+            funcJmp.rsi = (void*)&workerMainContext[GetWorkerThreadIndex()];
 
 #if defined(KIWI_HAS_VALGRIND)
             // Before context switch, register our stack with Valgrind.
             unsigned stack_id = VALGRIND_STACK_REGISTER(node.m_fiber->m_stack, node.m_fiber->m_stack + KiwiConfig::fiberSmallStackSize);
 #endif
 
-            swap_context(&main, &funcJmp);
+            swap_context(&workerMainContext[GetWorkerThreadIndex()], &funcJmp);
 
 #if defined(KIWI_HAS_VALGRIND)
             // We've returned from the context switch, we can now throw that stack out.
             VALGRIND_STACK_DEREGISTER(stack_id);
 #endif
+
+            if (node.m_fiber->m_counter)
+            {
+                node.m_fiber->m_counter->Decrement();
+            }
 
             // return node to the pool
             // return fiber to the pool
@@ -441,8 +588,7 @@ int main(int /*argc*/, char** /*argv*/)
     std::atomic_bool exit = ATOMIC_VAR_INIT(false);
 
     kiwi::FiberPool* fiberPool = new kiwi::FiberPool(100);
-
-    kiwi::SpinLock queueLock;
+    
     kiwi::Queue<Jobs> queue(100);
 
     Jobs jobs[3];
@@ -463,10 +609,11 @@ int main(int /*argc*/, char** /*argv*/)
     counterTaskData.m_queueLock = &queueLock;
     counterTaskData.m_queue = &queue;
     counterTaskData.m_cv = &cv;
+    counterTaskData.m_fiber = fiberPool->GetFiber();
 
     jobs[2].m_arg = &counterTaskData;
     jobs[2].m_function = CounterTask;
-    jobs[2].m_fiber = fiberPool->GetFiber();
+    jobs[2].m_fiber = counterTaskData.m_fiber;
 
     // JobsQueueNode node[2];
     // node[0].data.m_arg = &arg;
@@ -501,6 +648,7 @@ int main(int /*argc*/, char** /*argv*/)
     int32_t cpuCount = static_cast<int32_t>(CPU_COUNT(&cpuset));
 
     pthread_t* workerThreads = new pthread_t[cpuCount];    
+    workerMainContext = new kiwi::Context[cpuCount];
 
     for (int32_t i = 0; i < cpuCount; ++i)
     {
@@ -556,7 +704,12 @@ int main(int /*argc*/, char** /*argv*/)
     //     set_context(&funcJmp);
     // }
 
-    sleep(2);
+    std::unique_lock<std::mutex> lck(endProgMutex);
+    endProgCv.wait(lck);
+
+    lock.Lock();
+    printf("shutting down workers\n");
+    lock.Unlock();    
 
     exit.store(true);
 
