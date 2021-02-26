@@ -59,13 +59,14 @@ Fiber* FiberPool::CreatePool(int32_t poolSize) const
 {
     Fiber* pool = new Fiber[poolSize];
 
-    // make every fiber in the pool point to the next fiber in the list
     for (int32_t i = 0; i < poolSize - 1; ++i)
     {
+        pool[i] = {0};
         pool[i].next_ = &pool[i + 1];
     }
 
-    // make the last fiber point to nullptr
+    // make the last fiber point to nullptr so we know when the pool is empty
+    pool[poolSize - 1] = {0};
     pool[poolSize - 1].next_ = nullptr;
 
     return pool;
