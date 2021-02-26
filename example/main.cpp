@@ -2,7 +2,8 @@
 
 // #include <atomic>
 
-#include <unistd.h>
+#include <chrono>
+#include <thread>
 
 // #include "kiwi/Job.h"
 // #include "kiwi/Scheduler.h"
@@ -258,7 +259,7 @@ struct WorkerData
     kiwi::FiberPool* m_fiberPool;
 };
 
-static kiwi::Context* workerMainContext = nullptr;
+static kiwi::Context* workerMainContext;
 
 static std::mutex endProgMutex;
 static std::condition_variable endProgCv;
@@ -346,8 +347,6 @@ void PrintNumberTask(void* arg)
 {
     NumberData* num = reinterpret_cast<NumberData*>(arg);
 
-    sleep(1); // super bad, but we want this task to take awhile so we can test counters
-
     lock.Lock();
     printf("PrintNumberTask: %i CPU: %i\n", num->num, GetWorkerThreadIndex());
     lock.Unlock();
@@ -397,7 +396,10 @@ void CounterTask(void* arg)
     for (int i = 0; i < 25; ++i)
     {
         nums[i].num = i;
-        jobs[i] = { PrintNumberTask, &nums[i], data->fiberPool->GetFiber() };
+
+        jobs[i].m_arg = &nums[i];
+        jobs[i].m_function = PrintNumberTask;
+        jobs[i].m_fiber = data->fiberPool->GetFiber();
     }
 
     Counter counter;
@@ -411,11 +413,15 @@ void CounterTask(void* arg)
     }
     data->m_queueLock->Unlock();
 
-    data->m_cv->notify_all();
-
     delete[] jobs;
 
-    WaitForCounter(&counter, 0, data->m_fiber);
+    data->m_cv->notify_all();
+
+    //WaitForCounter(&counter, 0, data->m_fiber);
+    lock.Lock();
+    printf("Wait 2 seconds because wait for counter doesn't work\n");
+    lock.Unlock();
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
     lock.Lock();
     printf("Resumed because Counter finished %i\n", GetWorkerThreadIndex());
@@ -428,7 +434,7 @@ void CounterTask(void* arg)
         data->m_queueLock->Unlock();
     }
 
-    //delete[] nums;
+    delete[] nums;
 }
 
 // void FiberStart(Scheduler* scheduler, kiwi::Fiber* fiber)
@@ -479,7 +485,7 @@ void* worker_thread_entry(void* arg)
 
         //lck.unlock();
 
-        bool hasNode = false;
+        volatile bool hasNode = false;
         //JobsQueueNode* node = nullptr;
 
         // ck_spinlock_fas_lock(data->m_queueLock);   
@@ -511,14 +517,14 @@ void* worker_thread_entry(void* arg)
         if (!hasNode)
         {
             std::unique_lock<std::mutex> lck(*data->m_m);
-            data->m_cv->wait(lck, [&data]
+            data->m_cv->wait(lck);/*, [&data]
             {
                 data->m_queueLock->Lock();
                 const bool queueEmpty = data->m_queue->IsEmpty() && m_readyFibers.IsEmpty();
                 data->m_queueLock->Unlock();
 
                 return data->m_exit->load() || !queueEmpty;
-            });
+            });*/
             
             // return to the start of the loop so we can check if we should shutdown the worker, check for new jobs, or go back
             // to sleep because some other worker got the task before we could
@@ -538,7 +544,9 @@ void* worker_thread_entry(void* arg)
             //char* address = node.m_fiber->m_stack;
             //(void)address;
 
-            char *sp = (char*)(node.m_fiber->m_stack + KiwiConfig::fiberSmallStackSize);
+            char* fiberStackPointer = node.m_fiber->m_stack;
+
+            char *sp = (char*)(fiberStackPointer+ KiwiConfig::fiberStackSize);
 
             // Align stack pointer on 16-byte boundary.
             sp = (char*)((uintptr_t)sp & -16L);
@@ -548,27 +556,29 @@ void* worker_thread_entry(void* arg)
             // 16-byte aligned.
             sp -= 128;
 
-            kiwi::Context funcJmp = {0};
-            funcJmp.rip = (void*)FiberStart;
-            funcJmp.rsp = (void*)sp;
-            funcJmp.rdi = (void*)&node; 
-            funcJmp.rsi = (void*)&workerMainContext[GetWorkerThreadIndex()];
+            kiwi::Fiber* currentFiber = node.m_fiber;
+
+            currentFiber->m_context = {0};
+            currentFiber->m_context.rip = (void*)FiberStart;
+            currentFiber->m_context.rsp = (void*)sp;
+            currentFiber->m_context.rdi = (void*)&node; 
+            currentFiber->m_context.rsi = (void*)&workerMainContext[GetWorkerThreadIndex()];
 
 #if defined(KIWI_HAS_VALGRIND)
             // Before context switch, register our stack with Valgrind.
-            unsigned stack_id = VALGRIND_STACK_REGISTER(node.m_fiber->m_stack, node.m_fiber->m_stack + KiwiConfig::fiberSmallStackSize);
+            unsigned stack_id = VALGRIND_STACK_REGISTER(fiberStackPointer, fiberStackPointer + KiwiConfig::fiberStackSize);
 #endif
 
-            swap_context(&workerMainContext[GetWorkerThreadIndex()], &funcJmp);
+            swap_context(&workerMainContext[GetWorkerThreadIndex()], &currentFiber->m_context);
 
 #if defined(KIWI_HAS_VALGRIND)
             // We've returned from the context switch, we can now throw that stack out.
             VALGRIND_STACK_DEREGISTER(stack_id);
 #endif
 
-            if (node.m_fiber->m_counter)
+            if (currentFiber->m_counter)
             {
-                node.m_fiber->m_counter->Decrement();
+                currentFiber->m_counter->Decrement();
             }
 
             // return node to the pool
@@ -589,6 +599,14 @@ int main(int /*argc*/, char** /*argv*/)
 
     kiwi::FiberPool* fiberPool = new kiwi::FiberPool(100);
     
+    //for (int i = 0; i < 100; ++i)
+    //{
+    //    kiwi::Fiber* fiber = fiberPool->GetFiber();
+    //    (void)fiber;
+    //}   
+
+    //fiberPool->GetFiber();
+
     kiwi::Queue<Jobs> queue(100);
 
     Jobs jobs[3];
@@ -723,6 +741,7 @@ int main(int /*argc*/, char** /*argv*/)
     delete[] workerThreads;
 
     delete fiberPool;
+    delete[] workerMainContext;
 
     return 0;
 }
