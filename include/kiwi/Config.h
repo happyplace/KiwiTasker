@@ -27,6 +27,11 @@ namespace KiwiConfig
 
 #if defined(DEBUG) || defined(_DEBUG) || !defined(NDEBUG)
 
+// enables extra error checking for the scheduler
+#ifndef KIWI_SCHEDULER_ERROR_CHECKING
+#define KIWI_SCHEDULER_ERROR_CHECKING
+#endif // KIWI_SCHEDULER_ERROR_CHECKING
+
 // enables error checking for queues to makes sure invalid values aren't
 // used for the size and detecting when the list is full
 #ifndef KIWI_QUEUE_ERROR_CHECKING

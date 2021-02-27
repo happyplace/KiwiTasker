@@ -29,16 +29,17 @@ set(kiwi-tasker-src
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
     "src/Scheduler.cpp"    
+    "src/SchedulerImpl.cpp"
     "src/Counter.cpp"
     "src/FiberPool.cpp"
     "src/FiberWorkerStorage.cpp"
     "src/FiberWorkerThreadMain.cpp"
 )
 
-set(kiwi-tasker-src ${kiwi-tasker-src}
-    "include/kiwi/SchedulerImpl_unix.h"
-    "src/SchedulerImpl_unix.cpp"
-)
+#set(kiwi-tasker-src ${kiwi-tasker-src}
+#    "include/kiwi/SchedulerImpl_unix.h"
+#    "src/SchedulerImpl_unix.cpp"
+#)
 
 find_package (Threads REQUIRED)
 

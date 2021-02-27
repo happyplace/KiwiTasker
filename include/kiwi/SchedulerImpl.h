@@ -1,7 +1,25 @@
 #pragma once
 
-#if defined(__linux__) && !defined(__ANDROID__)
-#include "SchedulerImpl_unix.h"
-#else
-#error "This platform does not have a Scheduler Implementation class"
-#endif
+#include <inttypes.h>
+
+#include "kiwi/JobPriority.h"
+
+namespace kiwi
+{
+class Counter;
+struct Job;
+
+class SchedulerImpl
+{
+public:
+    SchedulerImpl();
+    ~SchedulerImpl();
+
+    SchedulerImpl(const SchedulerImpl&) = delete;
+    SchedulerImpl& operator=(const SchedulerImpl&) = delete;
+
+    void Init();
+    void AddJob(const Job* jobs, const uint32_t size, const JobPriority priority = JobPriority::Normal, Counter* counter = nullptr);
+    void WaitForCounter(Counter* counter, uint64_t value = 0);    
+};
+}
