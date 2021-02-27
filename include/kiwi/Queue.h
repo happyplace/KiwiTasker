@@ -16,7 +16,7 @@ template<typename T>
 class Queue
 {
 public:
-    Queue(const int32_t containerSize)
+    explicit Queue(const int32_t containerSize)
     {
 #if defined(KIWI_QUEUE_ERROR_CHECKING)
         assert(containerSize > 0 && "container size has to be greater than 0"); 

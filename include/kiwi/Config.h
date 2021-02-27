@@ -6,6 +6,7 @@ namespace KiwiConfig
 {
     // default size of job queues for the scheduler
     constexpr int32_t schedulerQueueSize = 1024;
+    constexpr int32_t schdulerPendingFiberArraySize = 128;
     constexpr int32_t schedulerFiberPoolSize = 512;
     constexpr int32_t fiberStackSize = 64000;
 }

@@ -2,12 +2,18 @@
 
 #include <assert.h>
 
+#include "kiwi/Config.h"
 #include "kiwi/FiberWorkerStorage.h"
 #include "kiwi/Scheduler.h"
 
 using namespace kiwi;
 
 SchedulerImpl::SchedulerImpl()
+    : m_queueHigh(KiwiConfig::schedulerQueueSize)
+    , m_queueNormal(KiwiConfig::schedulerQueueSize)
+    , m_queueLow(KiwiConfig::schedulerQueueSize)
+    , m_pendingFiber(KiwiConfig::schdulerPendingFiberArraySize)
+    , m_fiberPool(KiwiConfig::schedulerFiberPoolSize)
 {
 }
 
@@ -63,7 +69,87 @@ void SchedulerImpl::Init(Scheduler* scheduler)
 
 void SchedulerImpl::AddJob(const Job* jobs, const uint32_t size, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)
 {
+    m_queueSpinLock.Lock();
+    
+    Queue<PendingJob>* queue = nullptr;
+    switch (priority)
+    {
+        case JobPriority::High:
+            queue = &m_queueHigh;
+            break;
+        case JobPriority::Normal:
+            queue = &m_queueNormal;
+            break;
+        case JobPriority::Low:
+            queue = &m_queueLow;
+            break;
+        default:
+#ifdef KIWI_SCHEDULER_ERROR_CHECKING
+            assert(!"Job priority does not exist, Normal priority will be used.");
+#endif // KIWI_SCHEDULER_ERROR_CHECKING
+            queue = &m_queueNormal;
+            break;
+    }
 
+    PendingJob pendingJob;
+    pendingJob.m_counter = counter;
+    for (uint32_t i = 0; i < size; ++i)
+    {
+        pendingJob.m_job = jobs[i];
+        queue->Push(pendingJob);
+    }
+
+    m_queueSpinLock.Unlock();
+}
+
+Fiber* SchedulerImpl::GetNextAvailableFiber()
+{
+    m_queueSpinLock.Lock();
+
+    if (!m_queueHigh.IsEmpty())
+    {
+        PendingJob pendingJob;
+        bool result = m_queueHigh.TryGetAndPopFront(&pendingJob);
+
+#ifdef KIWI_SCHEDULER_ERROR_CHECKING
+        assert(result && "Did someone change this list when we had the lock on it?");
+#endif // KIWI_SCHEDULER_ERROR_CHECKING
+
+        m_queueSpinLock.Unlock();
+        
+        Fiber* fiber = m_fiberPool.GetFiber();
+        fiber->m_job = pendingJob.m_job;
+        fiber->m_counter = pendingJob.m_counter;
+
+        return fiber;
+    }
+
+    if (!m_pendingFiber.IsEmpty())
+    {
+        Fiber* fiber = m_pendingFiber[0];
+        m_pendingFiber.Remove(0);
+
+        m_queueSpinLock.Unlock();
+
+        return fiber;
+    }
+
+    PendingJob pendingJob;
+    bool gotJob = m_queueNormal.TryGetAndPopFront(&pendingJob);
+    gotJob = !gotJob ? m_queueLow.TryGetAndPopFront(&pendingJob) : gotJob;
+    
+    m_queueSpinLock.Unlock();
+
+    if (gotJob)
+    {
+        Fiber* fiber = m_fiberPool.GetFiber();
+        fiber->m_job = pendingJob.m_job;
+        fiber->m_counter = pendingJob.m_counter;
+
+        return fiber;
+    }
+
+    return nullptr;
 }
 
 void SchedulerImpl::WaitForCounter(Counter* counter, uint64_t value /*= 0*/)

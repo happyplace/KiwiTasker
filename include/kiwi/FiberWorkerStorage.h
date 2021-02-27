@@ -4,11 +4,11 @@
 
 namespace kiwi
 {
-class Scheduler;
 struct Fiber;
 
 struct FiberWorkerStorage
 {
+    Fiber* m_fiber = nullptr;
 };
 
 void CreateFiberWorkerStorage(int cpuCount);
