@@ -62,3 +62,21 @@ bool FiberWorkerStorage::GetOrWaitForNextFiber(kiwi::Fiber** outFiber)
     
     return false;
 }
+
+static WorkerData* workerData = nullptr;
+
+void CreateWorkerData(int cpuCount)
+{
+    workerData = new WorkerData[cpuCount];
+}
+
+void DestroyWorkerData()
+{
+    delete[] workerData;
+    workerData = nullptr;
+}
+
+WorkerData* GetWorkerData(int cpuIndex)
+{
+    return &workerData[cpuIndex];
+}

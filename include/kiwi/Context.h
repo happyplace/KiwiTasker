@@ -15,10 +15,5 @@ struct Context
 #else
 #error There is no context structure for this platform
 #endif
-
-#ifndef NDEBUG
-  char scratch[sizeof(jmp_buf)];
-#endif // NDEBUG
 };
-
 }

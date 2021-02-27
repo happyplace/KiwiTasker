@@ -35,3 +35,27 @@ struct FiberWorkerStorage
     bool GetOrWaitForNextFiber(kiwi::Fiber** outFiber);
 };
 }
+
+struct Jobs
+{
+    using JobFunc = void (*)(void* arg);
+
+    JobFunc m_function;
+    void* m_arg;
+    kiwi::Fiber* m_fiber; 
+};
+
+struct WorkerData
+{
+    kiwi::SpinLock* m_queueLock;
+    kiwi::Queue<Jobs>* m_queue;
+    std::condition_variable* m_cv;
+    std::mutex* m_m;
+    std::atomic_bool* m_exit;
+    kiwi::FiberPool* m_fiberPool;
+    kiwi::Fiber* m_currentFiber = nullptr;
+};
+
+void CreateWorkerData(int cpuCount);
+void DestroyWorkerData();
+WorkerData* GetWorkerData(int cpuIndex);

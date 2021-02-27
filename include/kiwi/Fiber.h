@@ -12,6 +12,7 @@ struct Fiber
 {
     char m_stack[KiwiConfig::fiberStackSize];
     kiwi::Context m_context = {0};
+    kiwi::Context m_returnContext = {0};
     kiwi::Job m_job = {0};
     union
     {
