@@ -22,6 +22,7 @@ int main(int /*argc*/, char** /*argv*/)
     scheduler.Init();
 
     ExampleData jobData;
+    jobData.secretNumber = 8001;
     kiwi::Job job { ExampleJob, &jobData };
     scheduler.AddJob(&job);
     

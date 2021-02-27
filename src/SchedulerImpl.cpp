@@ -41,7 +41,8 @@ FiberWorkerStorage* GetFiberWorkerStorage(SchedulerWorkerStartParams* params)
 
 void FiberStart(SchedulerWorkerStartParams* params)
 {
-
+    kiwi::Job& job = GetFiberWorkerStorage(params)->m_fiber->m_job;
+    job.m_function(params->m_scheduler, job.m_arg);
     
 #if defined(KIWI_HAS_VALGRIND)
     // we're returning the fiber to the pool so we can deregister the stack_id
