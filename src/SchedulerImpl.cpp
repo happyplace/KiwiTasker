@@ -169,6 +169,15 @@ void SchedulerImpl::AddJob(const Job* jobs, const uint32_t size, const JobPriori
     }
 
     m_queueSpinLock.Unlock();
+
+    if (size > 1)
+    {
+        m_workerConditionVariable.notify_all();
+    }
+    else
+    {
+        m_workerConditionVariable.notify_one();
+    }
 }
 
 bool SchedulerImpl::GetNextAvailableFiber(Fiber** outFiber, bool& outResume)
