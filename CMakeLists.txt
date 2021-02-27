@@ -24,6 +24,7 @@ set(kiwi-tasker-src
     "include/kiwi/FiberPool.h"
     "include/kiwi/FiberWorkerThreadMain.h"
     "include/kiwi/SchedulerImpl.h"
+    "include/kiwi/Array.h"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}

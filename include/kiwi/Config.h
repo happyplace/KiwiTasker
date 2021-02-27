@@ -33,6 +33,11 @@ namespace KiwiConfig
 #define KIWI_QUEUE_ERROR_CHECKING
 #endif // KIWI_QUEUE_ERROR_CHECKING
 
+// enables error checking for arrays. used for the size and detecting when the list is full
+#ifndef KIWI_ARRAY_ERROR_CHECKING
+#define KIWI_ARRAY_ERROR_CHECKING
+#endif // KIWI_QUEUE_ERROR_CHECKING
+
 // enables error checking for fiber pools, throws error if the fiber pool is ever full
 #ifndef KIWI_FIBERPOOL_ERROR_CHECKING
 #define KIWI_FIBERPOOL_ERROR_CHECKING
