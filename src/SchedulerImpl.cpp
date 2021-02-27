@@ -2,7 +2,12 @@
 
 #include <assert.h>
 
+#ifdef KIWI_HAS_VALGRIND
+#include <valgrind/valgrind.h>
+#endif // KIWI_HAS_VALGRIND
+
 #include "kiwi/Config.h"
+#include "kiwi/ContextFunctions.h"
 #include "kiwi/FiberWorkerStorage.h"
 #include "kiwi/Scheduler.h"
 
@@ -29,10 +34,74 @@ SchedulerImpl::~SchedulerImpl()
     }
 }
 
+FiberWorkerStorage* GetFiberWorkerStorage(SchedulerWorkerStartParams* params)
+{
+    return GetFiberWorkerStorage(params->m_schedulerImpl->GetThreadImpl().GetWorkerThreadIndex());
+}
+
+void FiberStart(SchedulerWorkerStartParams* params)
+{
+
+    
+#if defined(KIWI_HAS_VALGRIND)
+    // we're returning the fiber to the pool so we can deregister the stack_id
+    VALGRIND_STACK_DEREGISTER(GetFiberWorkerStorage(params)->m_fiber->stack_id);
+#endif // defined(KIWI_HAS_VALGRIND)
+
+    params->m_schedulerImpl->ReturnFiber(GetFiberWorkerStorage(params)->m_fiber);
+
+    set_context(&GetFiberWorkerStorage(params)->m_context);
+}
+
 void* SchedulerWorkerThread(void* arg)
 {
     SchedulerWorkerStartParams* params = reinterpret_cast<SchedulerWorkerStartParams*>(arg);
-    (void)params;
+    
+    params->m_schedulerImpl->GetThreadImpl().BlockSignalsOnWorkerThread();
+
+    get_context(&GetFiberWorkerStorage(params)->m_context);
+
+    while (!params->m_workerExit->load())
+    {
+        Fiber* fiber = nullptr;
+        bool resumeFiber = false;
+        if (params->m_schedulerImpl->GetNextAvailableFiber(&fiber, resumeFiber))
+        {
+            if (resumeFiber)
+            {
+
+            }
+            else
+            {
+                char* fiberStackPointer = fiber->m_stack;
+                char *sp = (char*)(fiberStackPointer + KiwiConfig::fiberStackSize);
+                
+                // Align stack pointer on 16-byte boundary.
+                sp = (char*)((uintptr_t)sp & -16L);
+
+                // Make 128 byte scratch space for the Red Zone. This arithmetic will not unalign
+                // our stack pointer because 128 is a multiple of 16. The Red Zone must also be
+                // 16-byte aligned.
+                sp -= 128;
+
+#if defined(KIWI_HAS_VALGRIND)
+                // Before context switch, register our stack with Valgrind.
+                fiber->stack_id = VALGRIND_STACK_REGISTER(fiberStackPointer, fiberStackPointer + KiwiConfig::fiberStackSize);
+#endif // defined(KIWI_HAS_VALGRIND)
+
+                kiwi::SetupContext(&fiber->m_context, (void*)FiberStart, sp, params);
+
+                GetFiberWorkerStorage(params)->m_fiber = fiber;
+                set_context(&fiber->m_context);
+            }
+
+            continue;
+        }
+
+        std::unique_lock<std::mutex> cvLock(*params->m_workerMutex);
+        params->m_workerConditionVariable->wait(cvLock);
+    }
+
     return NULL;
 }
 
@@ -102,8 +171,10 @@ void SchedulerImpl::AddJob(const Job* jobs, const uint32_t size, const JobPriori
     m_queueSpinLock.Unlock();
 }
 
-Fiber* SchedulerImpl::GetNextAvailableFiber()
+bool SchedulerImpl::GetNextAvailableFiber(Fiber** outFiber, bool& outResume)
 {
+    outResume = false;
+
     m_queueSpinLock.Lock();
 
     if (!m_queueHigh.IsEmpty())
@@ -117,21 +188,22 @@ Fiber* SchedulerImpl::GetNextAvailableFiber()
 
         m_queueSpinLock.Unlock();
         
-        Fiber* fiber = m_fiberPool.GetFiber();
-        fiber->m_job = pendingJob.m_job;
-        fiber->m_counter = pendingJob.m_counter;
+        (*outFiber) = m_fiberPool.GetFiber();
+        (*outFiber)->m_job = pendingJob.m_job;
+        (*outFiber)->m_counter = pendingJob.m_counter;
 
-        return fiber;
+        return true;
     }
 
     if (!m_pendingFiber.IsEmpty())
     {
-        Fiber* fiber = m_pendingFiber[0];
+        (*outFiber) = m_pendingFiber[0];
         m_pendingFiber.Remove(0);
 
         m_queueSpinLock.Unlock();
 
-        return fiber;
+        outResume = true;
+        return true;
     }
 
     PendingJob pendingJob;
@@ -142,14 +214,19 @@ Fiber* SchedulerImpl::GetNextAvailableFiber()
 
     if (gotJob)
     {
-        Fiber* fiber = m_fiberPool.GetFiber();
-        fiber->m_job = pendingJob.m_job;
-        fiber->m_counter = pendingJob.m_counter;
+        (*outFiber) = m_fiberPool.GetFiber();
+        (*outFiber)->m_job = pendingJob.m_job;
+        (*outFiber)->m_counter = pendingJob.m_counter;
 
-        return fiber;
+        return true;
     }
 
-    return nullptr;
+    return false;
+}
+
+void SchedulerImpl::ReturnFiber(Fiber* fiber)
+{
+    m_fiberPool.ReturnFiber(fiber);
 }
 
 void SchedulerImpl::WaitForCounter(Counter* counter, uint64_t value /*= 0*/)

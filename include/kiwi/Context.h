@@ -1,8 +1,6 @@
 #pragma once
 
-#ifndef NDEBUG
-#include <setjmp.h>
-#endif // NDEBUG
+#include "kiwi/Config.h"
 
 namespace kiwi
 {
@@ -15,5 +13,9 @@ struct Context
 #else
 #error There is no context structure for this platform
 #endif
+
+#ifdef KIWI_HAS_VALGRIND
+    unsigned stack_id = 0;
+#endif // KIWI_HAS_VALGRIND
 };
 }

@@ -14,7 +14,7 @@ void ExampleJob(kiwi::Scheduler* schduler, void* arg)
 {
     ExampleData* data = reinterpret_cast<ExampleData*>(arg);
     printf("The Secret Number is %i\n", data->secretNumber);
-}
+} 
 
 int main(int /*argc*/, char** /*argv*/)
 {

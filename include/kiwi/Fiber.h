@@ -20,6 +20,9 @@ struct Fiber
         
         // used by fiber pool and counters
         Fiber* next_;
-    };    
+    };   
+#ifdef KIWI_HAS_VALGRIND
+    unsigned stack_id = 0;
+#endif // KIWI_HAS_VALGRIND
 };
 }

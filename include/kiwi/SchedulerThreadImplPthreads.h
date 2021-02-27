@@ -16,6 +16,9 @@ public:
 
     void CreateThread(const char* threadName, int32_t threadAffinity, void *(*threadFunction) (void *), void* threadFunctionArg);
 
+    // this should be called by each worker thread to prevent receiving any signals
+    void BlockSignalsOnWorkerThread() const;
+
     void JoinWorkerThreads();
 
     // this uses the thread affinity to determine what the thread index is

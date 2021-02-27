@@ -2,6 +2,8 @@
 
 #include <assert.h>
 
+#include <signal.h>
+
 #ifndef PTRD_ERR_HNDLR
 #define PTRD_ERR_HNDLR(x) \
 { \
@@ -81,4 +83,11 @@ int32_t SchedulerThreadImpl::GetCpuCount() const
     cpu_set_t cpuset;
     sched_getaffinity(0, sizeof(cpuset), &cpuset);
     return static_cast<int32_t>(CPU_COUNT(&cpuset));
+}
+
+void SchedulerThreadImpl::BlockSignalsOnWorkerThread() const
+{
+    sigset_t mask;
+    sigfillset(&mask);
+    PTRD_ERR_HNDLR(pthread_sigmask(SIG_BLOCK, &mask, nullptr));
 }

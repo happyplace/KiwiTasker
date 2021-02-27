@@ -37,9 +37,6 @@ public:
     // THIS FUNCTION SHOULD ONLY BE CALLED FROM INSIDE JOBS
     void WaitForCounter(Counter* counter, uint64_t value = 0);    
 
-    // used internally
-    SchedulerImpl* GetImpl() { return m_impl; }
-
 private:
     SchedulerImpl* m_impl = nullptr;
 };

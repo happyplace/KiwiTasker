@@ -50,3 +50,7 @@ namespace KiwiConfig
 #endif // KIWI_FIBERPOOL_ERROR_CHECKING
 
 #endif // defined(DEBUG) || defined(_DEBUG) || !defined(NDEBUG)
+
+#if __has_include(<valgrind/valgrind.h>)
+#define KIWI_HAS_VALGRIND
+#endif // __has_include(<valgrind/valgrind.h>)

@@ -48,7 +48,10 @@ public:
     void AddJob(const Job* jobs, const uint32_t size, const JobPriority priority = JobPriority::Normal, Counter* counter = nullptr);
     void WaitForCounter(Counter* counter, uint64_t value = 0); 
 
-    Fiber* GetNextAvailableFiber();
+    bool GetNextAvailableFiber(Fiber** outFiber, bool& outResume);
+    void ReturnFiber(Fiber* fiber);
+
+    const SchedulerThreadImpl& GetThreadImpl() const { return m_threadImpl; }
 
 private:
     SchedulerThreadImpl m_threadImpl;
