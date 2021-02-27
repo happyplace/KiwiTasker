@@ -6,6 +6,7 @@
 #include <atomic>
 
 #include "kiwi/Array.h"
+#include "kiwi/Config.h"
 #include "kiwi/Counter.h"
 #include "kiwi/Fiber.h"
 #include "kiwi/FiberPool.h"
@@ -31,8 +32,15 @@ struct SchedulerWorkerStartParams
 
 struct PendingJob
 {
-    Job m_job;
-    Counter* m_counter;
+    Job m_job = {0};
+    Counter* m_counter = nullptr;
+};
+
+struct WaitingFiber
+{
+    int64_t m_targetValue = 0;
+    Fiber* m_fiber = nullptr;
+    Counter* m_counter = nullptr;
 };
 
 class SchedulerImpl
@@ -46,12 +54,19 @@ public:
 
     void Init(Scheduler* scheduler);
     void AddJob(const Job* jobs, const uint32_t size, const JobPriority priority = JobPriority::Normal, Counter* counter = nullptr);
-    void WaitForCounter(Counter* counter, uint64_t value = 0); 
+    void WaitForCounter(Counter* counter, int64_t value = 0); 
 
     bool GetNextAvailableFiber(Fiber** outFiber, bool& outResume);
     void ReturnFiber(Fiber* fiber);
 
     const SchedulerThreadImpl& GetThreadImpl() const { return m_threadImpl; }
+
+#ifdef KIWI_SCHEDULER_ERROR_CHECKING
+    // If there is any fiber waiting on this counter and the counter gets deleted this will force wake it up.
+    // this is considered an error and will assert if extra error checking is enabled.
+    // this should be called by counters when they're deleted
+    void WakeAnyFibersWaitingOnCounter(Counter* counter);
+#endif // KIWI_SCHEDULER_ERROR_CHECKING
 
 private:
     SchedulerThreadImpl m_threadImpl;
@@ -66,6 +81,9 @@ private:
     Queue<PendingJob> m_queueNormal;
     Queue<PendingJob> m_queueLow;
     Array<Fiber*> m_pendingFiber;
+
+    SpinLock m_waitingFiberLock;
+    Array<WaitingFiber> m_waitingFibers;
 
     FiberPool m_fiberPool;
 };

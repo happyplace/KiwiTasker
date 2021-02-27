@@ -43,7 +43,7 @@ void Scheduler::AddJob(const Job* jobs, const uint32_t size, const JobPriority p
     m_impl->AddJob(jobs, size, priority, counter);
 }
 
-void Scheduler::WaitForCounter(Counter* counter, uint64_t value /*= 0*/)
+void Scheduler::WaitForCounter(Counter* counter, int64_t value /*= 0*/)
 {
     m_impl->WaitForCounter(counter, value);
 }

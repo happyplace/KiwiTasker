@@ -35,7 +35,10 @@ public:
     // halt execution on current job until the counter reaches target value, if the counter is deleted before the target is reached
     // the job will be continued anyway.
     // THIS FUNCTION SHOULD ONLY BE CALLED FROM INSIDE JOBS
-    void WaitForCounter(Counter* counter, uint64_t value = 0);    
+    void WaitForCounter(Counter* counter, int64_t value = 0);    
+
+    // used internally
+    SchedulerImpl* GetImpl() { return m_impl; }
 
 private:
     SchedulerImpl* m_impl = nullptr;

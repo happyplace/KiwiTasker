@@ -211,7 +211,7 @@ public:
     {
         m_lock.Lock();
         uint64_t value = m_value.fetch_sub(1);
-        value--; // we're getting the value before we decrement so we need to subtract 1 to get the value we changed the atomic to
+        value--; 
         CheckWaitingFibers(value);
         m_lock.Unlock();
     }

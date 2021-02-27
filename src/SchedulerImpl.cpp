@@ -6,7 +6,6 @@
 #include <valgrind/valgrind.h>
 #endif // KIWI_HAS_VALGRIND
 
-#include "kiwi/Config.h"
 #include "kiwi/ContextFunctions.h"
 #include "kiwi/FiberWorkerStorage.h"
 #include "kiwi/Scheduler.h"
@@ -17,7 +16,8 @@ SchedulerImpl::SchedulerImpl()
     : m_queueHigh(KiwiConfig::schedulerQueueSize)
     , m_queueNormal(KiwiConfig::schedulerQueueSize)
     , m_queueLow(KiwiConfig::schedulerQueueSize)
-    , m_pendingFiber(KiwiConfig::schdulerPendingFiberArraySize)
+    , m_pendingFiber(KiwiConfig::schdulerPendingFiberArraySize)    
+    , m_waitingFibers(KiwiConfig::schedulerFiberPoolSize)
     , m_fiberPool(KiwiConfig::schedulerFiberPoolSize)
 {
 }
@@ -70,7 +70,8 @@ void* SchedulerWorkerThread(void* arg)
         {
             if (resumeFiber)
             {
-
+                GetFiberWorkerStorage(params)->m_fiber = fiber;
+                set_context(&fiber->m_context);
             }
             else
             {
@@ -163,8 +164,13 @@ void SchedulerImpl::AddJob(const Job* jobs, const uint32_t size, const JobPriori
 
     PendingJob pendingJob;
     pendingJob.m_counter = counter;
+    const bool hasCounter = counter != nullptr;
     for (uint32_t i = 0; i < size; ++i)
     {
+        if (hasCounter)
+        {
+            counter->Increment();
+        }
         pendingJob.m_job = jobs[i];
         queue->Push(pendingJob);
     }
@@ -236,10 +242,79 @@ bool SchedulerImpl::GetNextAvailableFiber(Fiber** outFiber, bool& outResume)
 
 void SchedulerImpl::ReturnFiber(Fiber* fiber)
 {
+    if (fiber->m_counter)
+    {
+        int64_t value = fiber->m_counter->Decrement();
+        
+        // we're getting the value before we decrement so we need to subtract 1 to get the value
+        value--;
+
+        m_waitingFiberLock.Lock();
+        for (int32_t i = 0; i < m_waitingFibers.GetSize(); ++i)
+        {
+            WaitingFiber& waitingFiber = m_waitingFibers[i];
+            if (waitingFiber.m_counter == fiber->m_counter)
+            {
+                if (waitingFiber.m_targetValue == value)
+                {
+                    m_queueSpinLock.Lock();
+                    m_pendingFiber.PushBack(waitingFiber.m_fiber);
+                    m_queueSpinLock.Unlock();
+
+                    m_waitingFibers.Remove(i);
+                    --i;
+                }
+            }
+        }
+        m_waitingFiberLock.Unlock();
+    }
+
     m_fiberPool.ReturnFiber(fiber);
 }
 
-void SchedulerImpl::WaitForCounter(Counter* counter, uint64_t value /*= 0*/)
+#ifdef KIWI_SCHEDULER_ERROR_CHECKING
+void SchedulerImpl::WakeAnyFibersWaitingOnCounter(Counter* counter)
 {
+    m_waitingFiberLock.Lock();
+    for (int32_t i = 0; i < m_waitingFibers.GetSize(); ++i)
+    {
+        WaitingFiber& waitingFiber = m_waitingFibers[i];
+        if (waitingFiber.m_fiber->m_counter == counter)
+        {
+            assert(!"a counter was deleted while there was still fibers waiting on the counter");
 
+            m_queueSpinLock.Lock();
+            m_pendingFiber.PushBack(waitingFiber.m_fiber);
+            m_queueSpinLock.Unlock();
+
+            m_waitingFibers.Remove(i);
+            --i;
+        }
+    }
+    m_waitingFiberLock.Unlock();
+}
+#endif // KIWI_SCHEDULER_ERROR_CHECKING
+
+void SchedulerImpl::WaitForCounter(Counter* counter, int64_t value /*= 0*/)
+{
+#ifdef KIWI_SCHEDULER_ERROR_CHECKING
+    assert(counter);
+#endif // #ifdef KIWI_SCHEDULER_ERROR_CHECKING
+
+    m_waitingFiberLock.Lock();
+    if (counter->GetValue() != value)
+    {
+        WaitingFiber waitingFiber;
+        waitingFiber.m_fiber = GetFiberWorkerStorage(m_threadImpl.GetWorkerThreadIndex())->m_fiber;
+        waitingFiber.m_targetValue = value;
+        waitingFiber.m_counter = counter;
+        m_waitingFibers.PushBack(waitingFiber);
+        m_waitingFiberLock.Unlock();
+        swap_context(&waitingFiber.m_fiber->m_context, &GetFiberWorkerStorage(m_threadImpl.GetWorkerThreadIndex())->m_context);
+    }
+    else
+    {
+        // if the counter is already at the value unlock and return
+        m_waitingFiberLock.Unlock();
+    }
 }

@@ -1,36 +1,30 @@
 #include "kiwi/Counter.h"
 
+#include "kiwi/Config.h"
 #include "kiwi/Scheduler.h"
+#include "kiwi/SchedulerImpl.h"
 
 using namespace kiwi;
 
 Counter::Counter(Scheduler* schduler)
     : m_scheduler(schduler)
 {
+    m_value.store(0);
 }
 
 Counter::~Counter()
 {
-    // check if there are waiting fibers and trigger CRITICAL ERROR in debug in release force wake up all waiting fibers
+#ifdef KIWI_SCHEDULER_ERROR_CHECKING
+    m_scheduler->GetImpl()->WakeAnyFibersWaitingOnCounter(this);
+#endif // KIWI_SCHEDULER_ERROR_CHECKING
 }
 
-void Counter::CheckWaiting()
+int64_t Counter::Increment()
 {
-    // for (WaitingFiber& waitingFiber : m_waitingFibers)
-    // {
-    //     if (waitingFiber.m_value == m_value)
-    //     {
-    //         for (std::size_t i = 0; i < m_scheduler->m_waitList.size(); ++i)
-    //         {
-    //             if (m_scheduler->m_waitList[i] == waitingFiber.m_fiber)
-    //             {
-    //                 m_scheduler->m_waitList.erase(m_scheduler->m_waitList.begin() + i);
-    //                 m_scheduler->m_readyList.push_back(waitingFiber.m_fiber);                        
-    //                 --i;
-    //             }
-    //         }
-    //         return;
-    //         // remove from waiting list, put back in list                
-    //     }
-    // }
+    return m_value.fetch_add(1);
+}
+
+int64_t Counter::Decrement()
+{
+    return m_value.fetch_sub(1);
 }
