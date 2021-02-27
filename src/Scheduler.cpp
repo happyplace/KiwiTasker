@@ -1,5 +1,8 @@
 #include "kiwi/Scheduler.h"
 
+#include <assert.h>
+
+#include "kiwi/Config.h"
 #include "kiwi/SchedulerImpl.h"
 
 using namespace kiwi;
@@ -19,7 +22,15 @@ Scheduler::~Scheduler()
 
 void Scheduler::Init()
 {
-    m_impl = new SchedulerImpl();
+#ifdef KIWI_SCHEDULER_ERROR_CHECKING
+    assert(m_impl == nullptr);
+#endif // KIWI_SCHEDULER_ERROR_CHECKING
+
+    if (m_impl == nullptr)
+    {
+        m_impl = new SchedulerImpl();
+        m_impl->Init(this);
+    }
 }
 
 void Scheduler::AddJob(const Job* job, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)

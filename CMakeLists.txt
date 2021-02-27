@@ -25,6 +25,7 @@ set(kiwi-tasker-src
     "include/kiwi/FiberWorkerThreadMain.h"
     "include/kiwi/SchedulerImpl.h"
     "include/kiwi/Array.h"
+    "include/kiwi/SchedulerThreadImpl.h"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
@@ -36,10 +37,11 @@ set(kiwi-tasker-src ${kiwi-tasker-src}
     "src/FiberWorkerThreadMain.cpp"
 )
 
-#set(kiwi-tasker-src ${kiwi-tasker-src}
-#    "include/kiwi/SchedulerImpl_unix.h"
-#    "src/SchedulerImpl_unix.cpp"
-#)
+add_definitions(-DKIWI_SCHEDULER_USE_PTHREAD)
+set(kiwi-tasker-src ${kiwi-tasker-src}
+    "include/kiwi/SchedulerThreadImplPthreads.h"
+    "src/SchedulerThreadImplPthreads.cpp"  
+)
 
 find_package (Threads REQUIRED)
 
