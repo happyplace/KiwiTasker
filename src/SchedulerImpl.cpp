@@ -51,16 +51,16 @@ void FiberStart(SchedulerWorkerStartParams* params)
 
     params->m_schedulerImpl->ReturnFiber(GetFiberWorkerStorage(params)->m_fiber);
 
-    set_context(&GetFiberWorkerStorage(params)->m_context);
+    //set_context(&GetFiberWorkerStorage(params)->m_context);
 }
 
-void* SchedulerWorkerThread(void* arg)
+WORKER_THREAD_DEFINITION(arg)
 {
     SchedulerWorkerStartParams* params = reinterpret_cast<SchedulerWorkerStartParams*>(arg);
     
     params->m_schedulerImpl->GetThreadImpl().BlockSignalsOnWorkerThread();
 
-    get_context(&GetFiberWorkerStorage(params)->m_context);
+    //get_context(&GetFiberWorkerStorage(params)->m_context);
 
     while (!params->m_workerExit->load())
     {
@@ -71,7 +71,7 @@ void* SchedulerWorkerThread(void* arg)
             if (resumeFiber)
             {
                 GetFiberWorkerStorage(params)->m_fiber = fiber;
-                set_context(&fiber->m_context);
+                //set_context(&fiber->m_context);
             }
             else
             {
@@ -94,7 +94,7 @@ void* SchedulerWorkerThread(void* arg)
                 kiwi::SetupContext(&fiber->m_context, (void*)FiberStart, sp, params);
 
                 GetFiberWorkerStorage(params)->m_fiber = fiber;
-                set_context(&fiber->m_context);
+                //set_context(&fiber->m_context);
             }
 
             continue;
@@ -104,7 +104,7 @@ void* SchedulerWorkerThread(void* arg)
         params->m_workerConditionVariable->wait(cvLock);
     }
 
-    return NULL;
+    WORKER_THREAD_RETURN_STATEMENT;
 }
 
 void SchedulerImpl::Init(Scheduler* scheduler)
@@ -138,7 +138,7 @@ void SchedulerImpl::Init(Scheduler* scheduler)
     }
 }
 
-void SchedulerImpl::AddJob(const Job* jobs, const uint32_t size, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)
+void SchedulerImpl::AddJobs(const Job* jobs, const uint32_t size, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)
 {
     m_queueSpinLock.Lock();
     
@@ -310,7 +310,7 @@ void SchedulerImpl::WaitForCounter(Counter* counter, int64_t value /*= 0*/)
         waitingFiber.m_counter = counter;
         m_waitingFibers.PushBack(waitingFiber);
         m_waitingFiberLock.Unlock();
-        swap_context(&waitingFiber.m_fiber->m_context, &GetFiberWorkerStorage(m_threadImpl.GetWorkerThreadIndex())->m_context);
+        //swap_context(&waitingFiber.m_fiber->m_context, &GetFiberWorkerStorage(m_threadImpl.GetWorkerThreadIndex())->m_context);
     }
     else
     {

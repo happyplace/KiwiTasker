@@ -26,11 +26,11 @@ public:
 
     // add a job to the queue, once this function returns it's safe to delete the job object because a copy
     // of the job structure is saved. If a counter is provided it will be incremented for the job added
-    void AddJob(const Job* job, const JobPriority priority = JobPriority::Normal, Counter* counter = nullptr);
+    void AddJobs(const Job* job, const JobPriority priority = JobPriority::Normal, Counter* counter = nullptr);
 
     // add multiple jobs to the queue, once this function returns it's safe to delete the job objects because a copy
     // of the job structures is saved. If a counter is provided it will be incremented for each job added
-    void AddJob(const Job* jobs, const uint32_t size, const JobPriority priority = JobPriority::Normal, Counter* counter = nullptr);
+    void AddJobs(const Job* jobs, const uint32_t size, const JobPriority priority = JobPriority::Normal, Counter* counter = nullptr);
 
     // halt execution on current job until the counter reaches target value, if the counter is deleted before the target is reached
     // the job will be continued anyway.

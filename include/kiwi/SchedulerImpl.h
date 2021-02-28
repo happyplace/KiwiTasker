@@ -53,7 +53,7 @@ public:
     SchedulerImpl& operator=(const SchedulerImpl&) = delete;
 
     void Init(Scheduler* scheduler);
-    void AddJob(const Job* jobs, const uint32_t size, const JobPriority priority = JobPriority::Normal, Counter* counter = nullptr);
+    void AddJobs(const Job* jobs, const uint32_t size, const JobPriority priority = JobPriority::Normal, Counter* counter = nullptr);
     void WaitForCounter(Counter* counter, int64_t value = 0); 
 
     bool GetNextAvailableFiber(Fiber** outFiber, bool& outResume);

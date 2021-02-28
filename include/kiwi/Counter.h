@@ -5,7 +5,7 @@
 
 namespace kiwi
 {
-struct Scheduler;
+class Scheduler;
 
 class Counter
 {

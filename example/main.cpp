@@ -10,7 +10,7 @@ struct ExampleData
     int secretNumber = 0;
 };
 
-void ExampleJob(kiwi::Scheduler* schduler, void* arg)
+void ExampleJob(kiwi::Scheduler* /*schduler*/, void* arg)
 {
     ExampleData* data = reinterpret_cast<ExampleData*>(arg);
 
@@ -22,14 +22,14 @@ struct NumberData
     int num = 0;
 };
 
-void PrintNumberJob(kiwi::Scheduler* scheduler, void* arg)
+void PrintNumberJob(kiwi::Scheduler* /*scheduler*/, void* arg)
 {
     NumberData* data = reinterpret_cast<NumberData*>(arg);
 
     printf("Number: %i\n", data->num);
 }
 
-void WaitExampleJob(kiwi::Scheduler* scheduler, void* arg)
+void WaitExampleJob(kiwi::Scheduler* scheduler, void* /*arg*/)
 {
     printf("WaitExampleJob - Start\n");
 
@@ -45,7 +45,7 @@ void WaitExampleJob(kiwi::Scheduler* scheduler, void* arg)
     // we can keep the counter on our stack because our stack will remain until our fiber completes execution
     kiwi::Counter counter(scheduler);
 
-    scheduler->AddJob(jobs, 25, kiwi::JobPriority::Normal, &counter);
+    scheduler->AddJobs(jobs, 25, kiwi::JobPriority::Normal, &counter);
     // once jobs are added to the scheduler they're safe to delete, because the scheduler keeps it's own copy of them
     delete[] jobs;  
 
@@ -67,7 +67,7 @@ int main(int /*argc*/, char** /*argv*/)
     kiwi::Job jobs[2];
     jobs[0] = { ExampleJob, &jobData };
     jobs[1] = { WaitExampleJob };
-    scheduler.AddJob(jobs, 2);
+    scheduler.AddJobs(jobs, 2);
     
     // we need to wait for all the jobs to finish running because they'll all be run on different threads
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
