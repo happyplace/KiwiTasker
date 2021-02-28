@@ -1,82 +1,38 @@
 #include "kiwi/FiberWorkerStorage.h"
 
+#include <assert.h>
+
+#include "kiwi/Config.h"
+
 using namespace kiwi;
 
-bool FiberWorkerStorage::GetOrWaitForNextFiber(kiwi::Fiber** outFiber)
-{    
-    PendingJob pendingJob;
-    bool haveJob = false;
+static FiberWorkerStorage* s_fiberWorkerStorage = nullptr;
+static int32_t s_fiberWorkerStorageCount = 0;
 
-    while (!m_closeWorker->load())
-    {
-        m_queueLock->Lock();
-        if (!haveJob)
-        {
-            haveJob = m_queueHigh->TryGetAndPopFront(&pendingJob);
-        }
+void kiwi::CreateFiberWorkerStorage(const int32_t cpuCount)
+{
+#ifdef KIWI_SCHEDULER_ERROR_CHECKING
+    assert(s_fiberWorkerStorage == nullptr && "Fiber Storage already exists, did you call CreateFiberWorkerStorage more than once");
+    assert(cpuCount > 0 && "why is there CPU count zero? It has to have atleast one");
+#endif // KIWI_SCHEDULER_ERROR_CHECKING
 
-        if (!haveJob)
-        {
-            haveJob = m_queueNormal->TryGetAndPopFront(&pendingJob);
-        }
-
-        if (!haveJob)
-        {
-            haveJob = m_queueLow->TryGetAndPopFront(&pendingJob);
-        }
-        m_queueLock->Unlock();
-
-        if (haveJob)
-        {
-            *outFiber = m_fiberPool->GetFiber();
-
-            assert(*outFiber && "No more fibers left in the fiber pool, increase the size or turn on dynamic sizing");
-            
-            // if we don't get a fiber just put the job back into the queue in the high priority list so it doesn't get lost
-            if (*outFiber == nullptr)
-            {
-                m_queueLock->Lock();
-                m_queueHigh->Push(pendingJob);
-                m_queueLock->Unlock();
-            }
-            else
-            {
-                (*outFiber)->m_job = pendingJob.m_job;
-                //(*outFiber)->m_counter = pendingJob.m_counter;
-                return true;
-            }
-        }
-
-        if (!haveJob)
-        {
-            //std::unique_lock<std::mutex> lock(*m_mutex);
-            // if the workers are suppose to close just return nullptr
-            // the worker thread will handle shuting down
-            //if (m_closeWorker->load())
-            {
-                //return false;
-            }
-            //m_conditionVariable->wait(lock);
-        }
-    }
-    
-    return false;
+    s_fiberWorkerStorageCount = cpuCount;
+    s_fiberWorkerStorage = new FiberWorkerStorage[cpuCount];
 }
 
-static WorkerData* workerData = nullptr;
-
-void CreateWorkerData(int cpuCount)
+void kiwi::DestroyFiberWorkerStorage()
 {
-    workerData = new WorkerData[cpuCount];
+#ifdef KIWI_SCHEDULER_ERROR_CHECKING
+    assert(s_fiberWorkerStorage != nullptr && "Fiber storage was never created, are you missing a call to CreateFiberWorkerStorage?");
+#endif // KIWI_SCHEDULER_ERROR_CHECKING
+    delete[] s_fiberWorkerStorage;
+    s_fiberWorkerStorage = nullptr;
 }
 
-void DestroyWorkerData()
+FiberWorkerStorage* kiwi::GetFiberWorkerStorage(const int32_t cpuIndex)
 {
-    delete[] workerData;
-    workerData = nullptr;
-}
-
-WorkerData* GetWorkerData(int cpuIndex)
-{
-    return &workerData[cpuIndex];
+#ifdef KIWI_SCHEDULER_ERROR_CHECKING
+    assert(cpuIndex >= 0 && cpuIndex < s_fiberWorkerStorageCount && "attempting to use an invalid cpuIndex to get FiberWorkerStorage");
+#endif // KIWI_SCHEDULER_ERROR_CHECKING
+    return &s_fiberWorkerStorage[cpuIndex];
 }

@@ -11,32 +11,34 @@ include_directories(include)
 include_directories(src)
 
 set(kiwi-tasker-src
-    "include/kiwi/Scheduler.h"
-    "include/kiwi/SpinLock.h"
+    "include/kiwi/Array.h"
+    "include/kiwi/Config.h"
     "include/kiwi/Context.h"
     "include/kiwi/Counter.h"
     "include/kiwi/Fiber.h"
+    "include/kiwi/FiberPool.h"
     "include/kiwi/FiberWorkerStorage.h"
     "include/kiwi/Job.h"
     "include/kiwi/JobPriority.h"
-    "include/kiwi/Config.h"
     "include/kiwi/Queue.h"
-    "include/kiwi/FiberPool.h"
-    "include/kiwi/FiberWorkerThreadMain.h"
+    "include/kiwi/Scheduler.h"
     "include/kiwi/SchedulerImpl.h"
+    "include/kiwi/SchedulerThreadImpl.h"
+    "include/kiwi/SpinLock.h"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
-    "src/Scheduler.cpp"    
-    "src/Counter.cpp"
+    "src/Counter.cpp"    
     "src/FiberPool.cpp"
     "src/FiberWorkerStorage.cpp"
-    "src/FiberWorkerThreadMain.cpp"
+    "src/Scheduler.cpp"    
+    "src/SchedulerImpl.cpp"
 )
 
+add_definitions(-DKIWI_SCHEDULER_USE_PTHREAD)
 set(kiwi-tasker-src ${kiwi-tasker-src}
-    "include/kiwi/SchedulerImpl_unix.h"
-    "src/SchedulerImpl_unix.cpp"
+    "include/kiwi/SchedulerThreadImplPthreads.h"
+    "src/SchedulerThreadImplPthreads.cpp"  
 )
 
 find_package (Threads REQUIRED)

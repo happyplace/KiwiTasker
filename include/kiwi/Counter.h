@@ -1,53 +1,31 @@
 #pragma once
 
-#include <list>
 #include <atomic>
-
-#include "kiwi/SpinLock.h"
+#include <inttypes.h>
 
 namespace kiwi
 {
-struct Fiber;
 struct Scheduler;
 
 class Counter
 {
 public:
-    Counter(Scheduler* schduler);
+    explicit Counter(Scheduler* schduler);
     ~Counter();
 
-    void Increment()
-    {
-        m_lock.Lock();
-        m_value++;
-        CheckWaiting();
-        m_lock.Unlock();
-    }
+    Counter(const Counter&) = delete;
+    Counter& operator=(const Counter&) = delete;
 
-    void Decrement()
-    {
-        m_lock.Lock();
-        m_value--;
-        CheckWaiting();
-        m_lock.Unlock();
-    }
+    // increments counter and returns the value it had BEFORE it was incremented
+    int64_t Increment();
 
-    uint64_t Value() const { return m_value.load(); }
+    // decrements counter and returns the value it had BEFORE it was decremented
+    int64_t Decrement();
 
-//private:
-    void CheckWaiting();
+    int64_t GetValue() const { return m_value.load(); }
 
+private:
     Scheduler* m_scheduler = nullptr;
-
-    kiwi::SpinLock m_lock;
-    std::atomic<uint64_t> m_value;
-
-    struct WaitingFiber
-    {
-        kiwi::Fiber* m_fiber;
-        uint64_t m_value;
-    };
-
-    std::list<WaitingFiber> m_waitingFibers;
+    std::atomic<int64_t> m_value;
 };
 }

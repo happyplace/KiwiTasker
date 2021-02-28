@@ -6,6 +6,7 @@ namespace KiwiConfig
 {
     // default size of job queues for the scheduler
     constexpr int32_t schedulerQueueSize = 1024;
+    constexpr int32_t schdulerPendingFiberArraySize = 128;
     constexpr int32_t schedulerFiberPoolSize = 512;
     constexpr int32_t fiberStackSize = 64000;
 }
@@ -27,10 +28,20 @@ namespace KiwiConfig
 
 #if defined(DEBUG) || defined(_DEBUG) || !defined(NDEBUG)
 
+// enables extra error checking for the scheduler
+#ifndef KIWI_SCHEDULER_ERROR_CHECKING
+#define KIWI_SCHEDULER_ERROR_CHECKING
+#endif // KIWI_SCHEDULER_ERROR_CHECKING
+
 // enables error checking for queues to makes sure invalid values aren't
 // used for the size and detecting when the list is full
 #ifndef KIWI_QUEUE_ERROR_CHECKING
 #define KIWI_QUEUE_ERROR_CHECKING
+#endif // KIWI_QUEUE_ERROR_CHECKING
+
+// enables error checking for arrays. used for the size and detecting when the list is full
+#ifndef KIWI_ARRAY_ERROR_CHECKING
+#define KIWI_ARRAY_ERROR_CHECKING
 #endif // KIWI_QUEUE_ERROR_CHECKING
 
 // enables error checking for fiber pools, throws error if the fiber pool is ever full
@@ -39,3 +50,7 @@ namespace KiwiConfig
 #endif // KIWI_FIBERPOOL_ERROR_CHECKING
 
 #endif // defined(DEBUG) || defined(_DEBUG) || !defined(NDEBUG)
+
+#if __has_include(<valgrind/valgrind.h>)
+#define KIWI_HAS_VALGRIND
+#endif // __has_include(<valgrind/valgrind.h>)

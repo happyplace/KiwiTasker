@@ -4,15 +4,14 @@
 #include "kiwi/Context.h"
 #include "kiwi/Job.h"
 
-class Counter;
-
 namespace kiwi
 {
+class Counter;
+
 struct Fiber
 {
     char m_stack[KiwiConfig::fiberStackSize];
     kiwi::Context m_context = {0};
-    kiwi::Context m_returnContext = {0};
     kiwi::Job m_job = {0};
     union
     {
@@ -20,6 +19,9 @@ struct Fiber
         
         // used by fiber pool and counters
         Fiber* next_;
-    };    
+    };   
+#ifdef KIWI_HAS_VALGRIND
+    unsigned stack_id = 0;
+#endif // KIWI_HAS_VALGRIND
 };
 }

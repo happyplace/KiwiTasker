@@ -1,22 +1,14 @@
 #pragma once
 
-#include <atomic>
-#include <condition_variable>
 #include <inttypes.h>
-#include <mutex>
 
+#include "kiwi/Counter.h"
 #include "kiwi/JobPriority.h"
-#include "kiwi/Queue.h"
-#include "kiwi/SpinLock.h"
+#include "kiwi/Job.h"
 
 namespace kiwi
 {
 class SchedulerImpl;
-class Counter;
-struct FiberWorkerStorage;
-struct Job;
-struct PendingJob;
-class FiberPool;
 
 class Scheduler
 {
@@ -40,25 +32,15 @@ public:
     // of the job structures is saved. If a counter is provided it will be incremented for each job added
     void AddJob(const Job* jobs, const uint32_t size, const JobPriority priority = JobPriority::Normal, Counter* counter = nullptr);
 
-    void WaitForCounter(Counter* counter, uint64_t value = 0);    
+    // halt execution on current job until the counter reaches target value, if the counter is deleted before the target is reached
+    // the job will be continued anyway.
+    // THIS FUNCTION SHOULD ONLY BE CALLED FROM INSIDE JOBS
+    void WaitForCounter(Counter* counter, int64_t value = 0);    
 
-    SchedulerImpl* GetImpl();
-
-    FiberWorkerStorage* GetFiberWorkerStorage();
+    // used internally
+    SchedulerImpl* GetImpl() { return m_impl; }
 
 private:
     SchedulerImpl* m_impl = nullptr;
-    FiberWorkerStorage* m_workerStorage = nullptr;
-
-    SpinLock m_queueLock;    
-    Queue<PendingJob> m_queueHigh;
-    Queue<PendingJob> m_queueNormal;    
-    Queue<PendingJob> m_queueLow;
-
-    FiberPool* m_fiberPool = nullptr;
-
-    std::condition_variable m_conditionVariable;
-    std::mutex m_mutex;
-    std::atomic_bool m_closeWorkers;
 };
 }
