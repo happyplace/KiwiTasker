@@ -54,12 +54,12 @@ void FiberStart(SchedulerWorkerStartParams* params)
     set_context(&GetFiberWorkerStorage(params)->m_context);
 }
 
-void* SchedulerWorkerThread(void* arg)
+WORKER_THREAD_DEFINITION(arg)
 {
     SchedulerWorkerStartParams* params = reinterpret_cast<SchedulerWorkerStartParams*>(arg);
     
     params->m_schedulerImpl->GetThreadImpl().BlockSignalsOnWorkerThread();
-
+    
     get_context(&GetFiberWorkerStorage(params)->m_context);
 
     while (!params->m_workerExit->load())
@@ -104,7 +104,7 @@ void* SchedulerWorkerThread(void* arg)
         params->m_workerConditionVariable->wait(cvLock);
     }
 
-    return NULL;
+    WORKER_THREAD_RETURN_STATEMENT;
 }
 
 void SchedulerImpl::Init(Scheduler* scheduler)
@@ -138,7 +138,7 @@ void SchedulerImpl::Init(Scheduler* scheduler)
     }
 }
 
-void SchedulerImpl::AddJob(const Job* jobs, const uint32_t size, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)
+void SchedulerImpl::AddJobs(const Job* jobs, const uint32_t size, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)
 {
     m_queueSpinLock.Lock();
     

@@ -3,6 +3,9 @@
 #include <pthread.h>
 #include <inttypes.h>
 
+#define WORKER_THREAD_DEFINITION(X) void* SchedulerWorkerThread(void* X)
+#define WORKER_THREAD_RETURN_STATEMENT return NULL
+
 namespace kiwi
 {
 class SchedulerThreadImpl

@@ -33,14 +33,14 @@ void Scheduler::Init()
     }
 }
 
-void Scheduler::AddJob(const Job* job, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)
+void Scheduler::AddJobs(const Job* job, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)
 {
-    m_impl->AddJob(job, 1, priority, counter);
+    m_impl->AddJobs(job, 1, priority, counter);
 }
 
-void Scheduler::AddJob(const Job* jobs, const uint32_t size, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)
+void Scheduler::AddJobs(const Job* jobs, const uint32_t size, const JobPriority priority /*= JobPriority::Normal*/, Counter* counter /*= nullptr*/)
 {
-    m_impl->AddJob(jobs, size, priority, counter);
+    m_impl->AddJobs(jobs, size, priority, counter);
 }
 
 void Scheduler::WaitForCounter(Counter* counter, int64_t value /*= 0*/)
