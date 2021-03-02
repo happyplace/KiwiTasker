@@ -9,3 +9,7 @@ namespace kiwi
         context->rcx = parameter;
     }
 }
+
+extern "C" void get_context(kiwi::Context*);
+extern "C" void set_context(kiwi::Context*);
+extern "C" void swap_context(kiwi::Context*, kiwi::Context*);

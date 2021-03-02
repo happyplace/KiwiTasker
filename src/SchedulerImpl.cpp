@@ -51,7 +51,7 @@ void FiberStart(SchedulerWorkerStartParams* params)
 
     params->m_schedulerImpl->ReturnFiber(GetFiberWorkerStorage(params)->m_fiber);
 
-    //set_context(&GetFiberWorkerStorage(params)->m_context);
+    set_context(&GetFiberWorkerStorage(params)->m_context);
 }
 
 WORKER_THREAD_DEFINITION(arg)
@@ -59,8 +59,8 @@ WORKER_THREAD_DEFINITION(arg)
     SchedulerWorkerStartParams* params = reinterpret_cast<SchedulerWorkerStartParams*>(arg);
     
     params->m_schedulerImpl->GetThreadImpl().BlockSignalsOnWorkerThread();
-
-    //get_context(&GetFiberWorkerStorage(params)->m_context);
+    
+    get_context(&GetFiberWorkerStorage(params)->m_context);
 
     while (!params->m_workerExit->load())
     {
@@ -71,7 +71,7 @@ WORKER_THREAD_DEFINITION(arg)
             if (resumeFiber)
             {
                 GetFiberWorkerStorage(params)->m_fiber = fiber;
-                //set_context(&fiber->m_context);
+                set_context(&fiber->m_context);
             }
             else
             {
@@ -94,7 +94,7 @@ WORKER_THREAD_DEFINITION(arg)
                 kiwi::SetupContext(&fiber->m_context, (void*)FiberStart, sp, params);
 
                 GetFiberWorkerStorage(params)->m_fiber = fiber;
-                //set_context(&fiber->m_context);
+                set_context(&fiber->m_context);
             }
 
             continue;
@@ -310,7 +310,7 @@ void SchedulerImpl::WaitForCounter(Counter* counter, int64_t value /*= 0*/)
         waitingFiber.m_counter = counter;
         m_waitingFibers.PushBack(waitingFiber);
         m_waitingFiberLock.Unlock();
-        //swap_context(&waitingFiber.m_fiber->m_context, &GetFiberWorkerStorage(m_threadImpl.GetWorkerThreadIndex())->m_context);
+        swap_context(&waitingFiber.m_fiber->m_context, &GetFiberWorkerStorage(m_threadImpl.GetWorkerThreadIndex())->m_context);
     }
     else
     {

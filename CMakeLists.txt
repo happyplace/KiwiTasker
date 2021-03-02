@@ -65,6 +65,13 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
     )
 endif()
 
+if (MSVC)
+    enable_language(ASM_NASM)
+    set(kiwi-tasker-src ${kiwi-tasker-src}
+        "src/context_functions_windows.asm"
+    )
+endif()
+
 find_package (Threads REQUIRED)
 
 add_library(KiwiTasker STATIC ${kiwi-tasker-src})
