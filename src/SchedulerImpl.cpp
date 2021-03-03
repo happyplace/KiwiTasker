@@ -301,20 +301,36 @@ void SchedulerImpl::WaitForCounter(Counter* counter, int64_t value /*= 0*/)
     assert(counter);
 #endif // #ifdef KIWI_SCHEDULER_ERROR_CHECKING
 
-    m_waitingFiberLock.Lock();
-    if (counter->GetValue() != value)
+    volatile bool returning = false;
+
+    Context context;
+    get_context(&context);
+
+    if (!returning)
     {
-        WaitingFiber waitingFiber;
-        waitingFiber.m_fiber = GetFiberWorkerStorage(m_threadImpl.GetWorkerThreadIndex())->m_fiber;
-        waitingFiber.m_targetValue = value;
-        waitingFiber.m_counter = counter;
-        m_waitingFibers.PushBack(waitingFiber);
-        m_waitingFiberLock.Unlock();
-        swap_context(&waitingFiber.m_fiber->m_context, &GetFiberWorkerStorage(m_threadImpl.GetWorkerThreadIndex())->m_context);
-    }
-    else
-    {
-        // if the counter is already at the value unlock and return
-        m_waitingFiberLock.Unlock();
+        m_waitingFiberLock.Lock();
+        if (counter->GetValue() != value)
+        {
+            WaitingFiber waitingFiber;
+            waitingFiber.m_fiber = GetFiberWorkerStorage(m_threadImpl.GetWorkerThreadIndex())->m_fiber;
+            waitingFiber.m_fiber->m_context = context;
+            waitingFiber.m_targetValue = value;
+            waitingFiber.m_counter = counter;
+            m_waitingFibers.PushBack(waitingFiber);
+            
+            // once we unlock the spin lock this fiber can be resumed immediately by another thread so we set this true
+            // so when this is resumed it won't come into this block and will instead exit this function and continue execution
+            returning = true; 
+
+            m_waitingFiberLock.Unlock();
+            
+            set_context(&GetFiberWorkerStorage(m_threadImpl.GetWorkerThreadIndex())->m_context);
+            assert(!"We should not get here EVER!");
+        }
+        else
+        {
+            // if the counter is already at the value unlock and return
+            m_waitingFiberLock.Unlock();
+        }
     }
 }
