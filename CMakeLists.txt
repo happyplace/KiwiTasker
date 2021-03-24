@@ -17,6 +17,8 @@ if (MSVC)
     set(CMAKE_CXX_FLAGS "${MSVC_COMMON_FLAGS}" CACHE STRING "C++ Common Flags" FORCE)
 endif()
 
+set (CMAKE_CXX_STANDARD 11)
+
 include_directories(include)
 
 include_directories(src)
