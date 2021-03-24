@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0)
 
 cmake_policy(SET CMP0079 NEW)
 
-project(kiwi-example C)
+project(kiwi-example)
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     set(CMAKE_CXX_FLAGS "-Wall -Werror")
@@ -19,12 +19,19 @@ if (MSVC)
     set(CMAKE_CXX_FLAGS "${MSVC_COMMON_FLAGS}" CACHE STRING "C++ Common Flags" FORCE)
 endif()
 
-#include_directories("../include")
+include_directories("../external/deboost.context/include")
+add_subdirectory("../external/deboost.context" build EXCLUDE_FROM_ALL)
 #add_subdirectory(.. build EXCLUDE_FROM_ALL)
 
-add_executable(kiwi-example main.c "../external/simple-stdatomic-for-VS-Clang/stdatomic.h" "../external/simple-stdatomic-for-VS-Clang/stdatomic.c")
+add_executable(kiwi-example main.cpp) #"../external/simple-stdatomic-for-VS-Clang/stdatomic.h" "../external/simple-stdatomic-for-VS-Clang/stdatomic.c")
 
 set_property(TARGET kiwi-example PROPERTY C_STANDARD 11)
 set_property(TARGET kiwi-example PROPERTY C_STANDARD_REQUIRED ON)
 
 #target_link_libraries(kiwi-example KiwiTasker)
+
+target_link_libraries(kiwi-example d3dcompiler.lib)
+target_link_libraries(kiwi-example D3D12.lib)
+target_link_libraries(kiwi-example dxgi.lib)
+
+target_link_libraries(kiwi-example fcontext)
