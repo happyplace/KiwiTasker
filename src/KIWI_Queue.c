@@ -10,7 +10,7 @@ typedef struct KIWI_Queue
 } KIWI_Queue;
 
 
-struct KIWI_Queue* KIWI_InitializeQueue(int elementSize, int maxCapacity)
+struct KIWI_Queue* KIWI_CreateQueue(int elementSize, int maxCapacity)
 {
 	(void)elementSize;
 	(void)maxCapacity;

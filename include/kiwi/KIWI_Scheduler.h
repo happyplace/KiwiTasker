@@ -20,7 +20,7 @@ extern DECLSPEC void KIWI_DefaultSchedulerParams(KIWI_SchedulerParams* params);
 // creates KIWI_Scheduler, initializes memory and starts worker threads. This function should be called before calling 
 // any other functions on the Scheduler.
 // KIWI_FreeScheduler needs to be called to shutdown worker threads and free memory
-extern DECLSPEC struct KIWI_Scheduler* KIWI_InitializeScheduler(KIWI_SchedulerParams* params);
+extern DECLSPEC struct KIWI_Scheduler* KIWI_CreateScheduler(KIWI_SchedulerParams* params);
 
 // shuts down worker threads and cleans up memory for scheduler
 extern DECLSPEC void KIWI_FreeScheduler(struct KIWI_Scheduler* scheduler);

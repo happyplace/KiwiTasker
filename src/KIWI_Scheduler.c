@@ -16,7 +16,7 @@ void KIWI_DefaultSchedulerParams(KIWI_SchedulerParams* params)
 	params->jobQueueSize = 1024;
 }
 
-KIWI_Scheduler* KIWI_InitializeScheduler(KIWI_SchedulerParams* params)
+KIWI_Scheduler* KIWI_CreateScheduler(KIWI_SchedulerParams* params)
 {
 	(void)params;
 

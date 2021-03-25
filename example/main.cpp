@@ -61,10 +61,10 @@ int main(int /*argc*/, char** /*argv*/)
     KIWI_SchedulerParams params;
     KIWI_DefaultSchedulerParams(&params);
 
-    KIWI_Scheduler* scheduler = KIWI_InitializeScheduler(&params);
+    KIWI_Scheduler* scheduler = KIWI_CreateScheduler(&params);
     KIWI_FreeScheduler(scheduler);
 
-    KIWI_Queue* queue = KIWI_InitializeQueue(sizeof(KIWI_Job), 1024);
+    KIWI_Queue* queue = KIWI_CreateQueue(sizeof(KIWI_Job), 1024);
     KIWI_FreeQueue(queue);
 
     //fcontext_stack_t s = create_fcontext_stack(16 * 1024);
