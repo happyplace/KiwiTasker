@@ -265,6 +265,7 @@ bool atomic_flag_test_and_set(volatile atomic_flag *flag)
 
 bool atomic_flag_test_and_set_explicit(volatile atomic_flag* object, memory_order order)
 {
+    (void)order;
     return atomic_flag_test_and_set(object);
 }
 
@@ -275,6 +276,7 @@ void atomic_flag_clear(volatile atomic_flag *flag)
 
 void atomic_flag_clear_explicit(volatile atomic_flag* object, memory_order order)
 {
+    (void)order;
     atomic_flag_clear(object);
 }
 

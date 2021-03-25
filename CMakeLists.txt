@@ -1,12 +1,14 @@
 cmake_minimum_required(VERSION 3.0)
 
-project(KiwiTasker)
+cmake_policy(SET CMP0054 NEW)
+
+project(KiwiTasker C)
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    set(CMAKE_CXX_FLAGS "-Wall -Werror")
+    set(CMAKE_C_FLAGS "-Wall -Werror")
 endif()
 
-if (MSVC)
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     set(MSVC_COMMON_FLAGS 
 	    /nologo     # Don't show version info
 	    /W4         # Enable warning level 4
@@ -14,25 +16,39 @@ if (MSVC)
 	    /WX         # Treat warnings as errors
     )
     string(REPLACE ";" " " MSVC_COMMON_FLAGS "${MSVC_COMMON_FLAGS}")
-    set(CMAKE_CXX_FLAGS "${MSVC_COMMON_FLAGS}" CACHE STRING "C++ Common Flags" FORCE)
+    set(CMAKE_C_FLAGS "${MSVC_COMMON_FLAGS}" CACHE STRING "C Common Flags" FORCE)
 endif()
 
-set (CMAKE_CXX_STANDARD 11)
+include_directories("include")
+include_directories("src")
 
-include_directories(include)
-
-include_directories(src)
+add_definitions(-DKIWI_DLL_EXPORT)
 
 set(kiwi-tasker-src
-
+	"include/kiwi/KIWI_Std.h"
+	"include/kiwi/KIWI_Atomics.h"
+	"include/kiwi/KIWI_Scheduler.h"
+	"include/kiwi/KIWI_Queue.h"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
-
+	"src/KIWI_Scheduler.c"
+	"src/KIWI_Queue.c"
 )
 
-#find_package (Threads REQUIRED)
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+	add_definitions(-DKIWI_USE_SIMPLE_STDATOMIC)
+	set(kiwi-tasker-src ${kiwi-tasker-src}
+		"external/simple-stdatomic-for-VS-Clang/stdatomic.h"
+		"external/simple-stdatomic-for-VS-Clang/stdatomic.c"
+	)
+endif()
 
-#add_library(KiwiTasker DYNAMIC ${kiwi-tasker-src})
+find_package (Threads REQUIRED)
 
-#target_link_libraries(KiwiTasker Threads::Threads)
+add_library(KiwiTasker SHARED ${kiwi-tasker-src})
+
+set_property(TARGET KiwiTasker PROPERTY C_STANDARD 11)
+set_property(TARGET KiwiTasker PROPERTY C_STANDARD_REQUIRED ON)
+
+target_link_libraries(KiwiTasker Threads::Threads)
