@@ -29,6 +29,7 @@ set(kiwi-tasker-src
 	"include/kiwi/KIWI_Atomics.h"
 	"include/kiwi/KIWI_Scheduler.h"
 	"include/kiwi/KIWI_Queue.h"
+	"include/kiwi/KIWI_Job.h"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
