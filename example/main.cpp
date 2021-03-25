@@ -64,7 +64,50 @@ int main(int /*argc*/, char** /*argv*/)
     KIWI_Scheduler* scheduler = KIWI_CreateScheduler(&params);
     KIWI_FreeScheduler(scheduler);
 
-    KIWI_Queue* queue = KIWI_CreateQueue(sizeof(KIWI_Job), 1024);
+    KIWI_Queue* queue = KIWI_CreateQueue(sizeof(int), 5);
+
+    bool isEmpty = KIWI_QueueIsEmpty(queue);
+    (void)isEmpty;
+    bool isFull = KIWI_QueueIsFull(queue);
+    (void)isFull;
+
+    int value = 1337;
+    KIWI_QueuePush(queue, &value);
+    
+    value = 8001;
+    KIWI_QueuePush(queue, &value);
+
+    value = 9001;
+    KIWI_QueuePush(queue, &value);
+
+    value = 45;
+    KIWI_QueuePush(queue, &value);
+
+    value = 1;
+    KIWI_QueuePush(queue, &value);
+    
+    bool isFullNow = KIWI_QueueIsFull(queue);
+    (void)isFullNow;
+
+    int outValue = 0;
+    KIWI_QueuePop(queue, &outValue);
+
+    value = 54;
+    KIWI_QueuePush(queue, &value);
+
+    while (!KIWI_QueueIsEmpty(queue))
+    {
+        if (KIWI_QueuePop(queue, &outValue))
+        {
+            printf("%i\n", outValue);
+        }
+    }
+
+    if (!KIWI_QueuePop(queue, &outValue))
+    {
+        printf("it's empty man\n");
+    }
+
     KIWI_FreeQueue(queue);
 
     //fcontext_stack_t s = create_fcontext_stack(16 * 1024);
