@@ -6,6 +6,8 @@
 
 #include "kiwi/KIWI_Scheduler.h"
 
+#include "kiwi/KIWI_Queue.h"
+
 #include <d3d12.h>
 #include <dxgi1_4.h>
 #include <wrl.h>
@@ -36,6 +38,11 @@
 //    jump_fcontext(t.ctx, NULL);
 //}
 
+typedef struct KIWI_Job
+{
+    int dummy;
+} KIWI_Job;
+
 //int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/, PSTR /*lpCmdLine*/, int /*nCmdShow*/)
 int main(int /*argc*/, char** /*argv*/)
 {
@@ -51,6 +58,9 @@ int main(int /*argc*/, char** /*argv*/)
     KIWI_InitializeScheduler(&scheduler, &params);
 
     KIWI_FreeScheduler(&scheduler);
+
+    KIWI_Queue* queue = KIWI_InitializeQueue(sizeof(KIWI_Job), 1024);
+    KIWI_FreeQueue(queue);
 
     //fcontext_stack_t s = create_fcontext_stack(16 * 1024);
 
