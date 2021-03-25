@@ -43,6 +43,13 @@ typedef struct KIWI_Job
     int dummy;
 } KIWI_Job;
 
+void TestJob(KIWI_Scheduler* scheduler, void* arg)
+{
+    (void)scheduler;
+    printf("Hello There!\n");
+    printf("message: %s\n", (char*)arg);
+}
+
 //int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/, PSTR /*lpCmdLine*/, int /*nCmdShow*/)
 int main(int /*argc*/, char** /*argv*/)
 {
@@ -54,10 +61,8 @@ int main(int /*argc*/, char** /*argv*/)
     KIWI_SchedulerParams params;
     KIWI_DefaultSchedulerParams(&params);
 
-    KIWI_Scheduler scheduler;
-    KIWI_InitializeScheduler(&scheduler, &params);
-
-    KIWI_FreeScheduler(&scheduler);
+    KIWI_Scheduler* scheduler = KIWI_InitializeScheduler(&params);
+    KIWI_FreeScheduler(scheduler);
 
     KIWI_Queue* queue = KIWI_InitializeQueue(sizeof(KIWI_Job), 1024);
     KIWI_FreeQueue(queue);

@@ -6,27 +6,24 @@
 extern "C" {
 #endif
 
-typedef struct KIWI_Scheduler
-{
-	void* impl;
-} KIWI_Scheduler;
+struct KIWI_Scheduler;
 
 typedef struct KIWI_SchedulerParams
 {
-	// this is the max amount of jobs that can be in the queue at one time
+	// this is the max amount of jobs that can be in queue
 	int jobQueueSize;
 } KIWI_SchedulerParams;
 
-// this will populate params with default values, you can use this to further tweak options
+// this will populate params with default values. These defaults can be used to further tweak options
 extern DECLSPEC void KIWI_DefaultSchedulerParams(KIWI_SchedulerParams* params);
 
-// initializes memory and starts worker threads, this function should be called before calling 
+// creates KIWI_Scheduler, initializes memory and starts worker threads. This function should be called before calling 
 // any other functions on the Scheduler.
 // KIWI_FreeScheduler needs to be called to shutdown worker threads and free memory
-extern DECLSPEC void KIWI_InitializeScheduler(KIWI_Scheduler* scheduler, KIWI_SchedulerParams* params);
+extern DECLSPEC struct KIWI_Scheduler* KIWI_InitializeScheduler(KIWI_SchedulerParams* params);
 
 // shuts down worker threads and cleans up memory for scheduler
-extern DECLSPEC void KIWI_FreeScheduler(KIWI_Scheduler* scheduler);
+extern DECLSPEC void KIWI_FreeScheduler(struct KIWI_Scheduler* scheduler);
 
 #ifdef __cplusplus
 }
