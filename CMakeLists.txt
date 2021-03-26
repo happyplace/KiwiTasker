@@ -30,12 +30,21 @@ set(kiwi-tasker-src
 	"include/kiwi/KIWI_Scheduler.h"
 	"include/kiwi/KIWI_Queue.h"
 	"include/kiwi/KIWI_Job.h"
+	"include/kiwi/KIWI_ThreadImpl.h"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
 	"src/KIWI_Scheduler.c"
 	"src/KIWI_Queue.c"
 )
+
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+	add_definitions(-DKIWI_USE_WINTHREAD_IMPL)
+	set(kiwi-tasker-src ${kiwi-tasker-src}
+		"include/kiwi/KIWI_ThreadImplWinThread.h"
+		"src/KIWI_ThreadImplWinThread.c"
+	)
+endif()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 	add_definitions(-DKIWI_USE_SIMPLE_STDATOMIC)

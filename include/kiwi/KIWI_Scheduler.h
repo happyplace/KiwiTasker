@@ -12,6 +12,11 @@ typedef struct KIWI_SchedulerParams
 {
 	// this is the max amount of jobs that can be in queue
 	int jobQueueSize;
+
+	// this is the amount of worker threads to create.
+	// setting a value higher than the physical cpu count or a value lower than one will be ignored, and will instead use the phyiscal cpu count.
+	// KIWI_DefaultSchedulerParams will set this value to the physical cpu count
+	int workerCount;
 } KIWI_SchedulerParams;
 
 // this will populate params with default values. These defaults can be used to further tweak options
