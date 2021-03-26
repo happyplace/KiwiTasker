@@ -126,3 +126,30 @@ void KIWI_ThreadImplBlockSignalsOnWorkerThread()
 {
 	// from my research this isn't something that happens on windows so we do nothing here
 }
+
+int KIWI_ThreadImplGetWorkerThreadIndex()
+{
+	GROUP_AFFINITY groupAffinity;
+	ZeroMemory(&groupAffinity, sizeof(GROUP_AFFINITY));
+	bool result = GetThreadGroupAffinity(GetCurrentThread(), &groupAffinity);
+	if (result == false)
+	{
+		KIWI_ASSERT(!"why did we fail to get the affinity???");
+		return -1;
+	}
+
+	const int threadIndex = (int)(groupAffinity.Group * MS_CORES_PER_GROUP);
+	for (int i = 0; i < MS_CORES_PER_GROUP; ++i)
+	{
+		const DWORD_PTR mask = (DWORD_PTR)(1) << i;
+		// we assume this will only be called by worker threads so when we find the first set affinity
+		// we add it to the threadIndex and return that value
+		if ((groupAffinity.Mask & mask) != 0)
+		{
+			return threadIndex + i;
+		}
+	}
+
+	KIWI_ASSERT(!"Why is no cpu set, is this being called outside of a scheduler thread?");
+	return -1;
+}
