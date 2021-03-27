@@ -2,8 +2,6 @@
 
 #include <stdbool.h>
 
-#include "kiwi/KIWI_std.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -14,7 +12,7 @@ struct KIWI_Queue;
 // The pointer returned by this function needs a call to KIWI_FreeQueue to free the memory
 struct KIWI_Queue* KIWI_CreateQueue(int elementSize, int maxCapacity);
 
-// This frees all the memory associated with a queue created by KIWI_InitializeQueue
+// This frees all the memory associated with a queue created by KIWI_CreateQueue
 void KIWI_FreeQueue(struct KIWI_Queue* queue);
 
 // returns true if the queue is empty
