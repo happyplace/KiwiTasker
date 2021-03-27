@@ -33,6 +33,7 @@ set(kiwi-tasker-src
 	"include/kiwi/KIWI_ThreadImpl.h"
 	"include/kiwi/KIWI_FiberWorkerStorage.h"
 	"include/kiwi/KIWI_SpinLock.h"
+	"include/kiwi/KIWI_JobPriority.h"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
