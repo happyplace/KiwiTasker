@@ -22,6 +22,8 @@ typedef struct KIWI_Scheduler
 	struct KIWI_Queue* queueNormal;
 	struct KIWI_Queue* queueHigh;
 
+	struct KIWI_Queue* queueReadyFibers;
+
 	struct KIWI_FiberPool* fiberPool;
 
 	struct KIWI_SpinLock* counterLock;
@@ -48,6 +50,7 @@ void KIWI_DefaultSchedulerParams(KIWI_SchedulerParams* params)
 	params->fiberPoolSize = 512;
 	params->fiberStackSize = 512 * 1024;
 	params->countersCapacity = 25;
+	params->waitingFiberCapacity = 128;
 }
 
 bool KIWI_SchedulerGetNextFiber(KIWI_Scheduler* scheduler, KIWI_Fiber** outFiber, bool* outResumeFiber)
@@ -60,7 +63,8 @@ bool KIWI_SchedulerGetNextFiber(KIWI_Scheduler* scheduler, KIWI_Fiber** outFiber
 	{
 		KIWI_PendingJob pendingJob;
 		bool result = KIWI_QueuePop(scheduler->queueHigh, &pendingJob);
-		KIWI_ASSERT(result);	
+		KIWI_ASSERT(result);
+		KIWI_ALLOW_UNUSED(result);
 
 		KIWI_Fiber* fiber = KIWI_FiberPoolGet(scheduler->fiberPool);
 		(*outFiber) = fiber;
@@ -70,11 +74,25 @@ bool KIWI_SchedulerGetNextFiber(KIWI_Scheduler* scheduler, KIWI_Fiber** outFiber
 		KIWI_UnlockSpinLock(scheduler->queueLock);
 		return true;		
 	}
+	else if (!KIWI_QueueIsEmpty(scheduler->queueReadyFibers))
+	{
+		KIWI_Fiber* fiber = NULL;
+		bool result = KIWI_QueuePop(scheduler->queueReadyFibers, &fiber);
+		KIWI_ASSERT(result);
+		KIWI_ALLOW_UNUSED(result);
+
+		(*outResumeFiber) = true;
+		(*outFiber) = fiber;
+
+		KIWI_UnlockSpinLock(scheduler->queueLock);
+		return true;
+	}
 	else if (!KIWI_QueueIsEmpty(scheduler->queueNormal))
 	{
 		KIWI_PendingJob pendingJob;
 		bool result = KIWI_QueuePop(scheduler->queueNormal, &pendingJob);
 		KIWI_ASSERT(result);
+		KIWI_ALLOW_UNUSED(result);
 
 		KIWI_Fiber* fiber = KIWI_FiberPoolGet(scheduler->fiberPool);
 		(*outFiber) = fiber;
@@ -89,6 +107,7 @@ bool KIWI_SchedulerGetNextFiber(KIWI_Scheduler* scheduler, KIWI_Fiber** outFiber
 		KIWI_PendingJob pendingJob;
 		bool result = KIWI_QueuePop(scheduler->queueLow, &pendingJob);
 		KIWI_ASSERT(result);
+		KIWI_ALLOW_UNUSED(result);
 
 		KIWI_Fiber* fiber = KIWI_FiberPoolGet(scheduler->fiberPool);
 		(*outFiber) = fiber;
@@ -168,32 +187,12 @@ KIWI_Scheduler* KIWI_CreateScheduler(const KIWI_SchedulerParams* params)
 	}
 
 	scheduler->queueLock = KIWI_CreateSpinLock();
-	if (scheduler->queueLock == NULL)
-	{
-		KIWI_ASSERT(!"are we out of memory???");
-		return NULL;
-	}
 
 	scheduler->queueLow = KIWI_CreateQueue(sizeof(KIWI_PendingJob), params->jobQueueSize);
-	if (scheduler->queueLow == NULL)
-	{
-		KIWI_ASSERT(!"are we out of memory???");
-		return NULL;
-	}
-
 	scheduler->queueNormal = KIWI_CreateQueue(sizeof(KIWI_PendingJob), params->jobQueueSize);
-	if (scheduler->queueNormal == NULL)
-	{
-		KIWI_ASSERT(!"are we out of memory???");
-		return NULL;
-	}
-
 	scheduler->queueHigh = KIWI_CreateQueue(sizeof(KIWI_PendingJob), params->jobQueueSize);
-	if (scheduler->queueHigh == NULL)
-	{
-		KIWI_ASSERT(!"are we out of memory???");
-		return NULL;
-	}
+
+	scheduler->queueReadyFibers = KIWI_CreateQueue(sizeof(KIWI_Fiber*), params->waitingFiberCapacity);
 
 	int cpuCount = KIWI_ThreadImplGetCpuCount();
 	if (params->workerCount < cpuCount && params->workerCount >= 1)
@@ -234,6 +233,8 @@ void KIWI_FreeScheduler(KIWI_Scheduler* scheduler)
 	KIWI_FreeQueue(scheduler->queueLow);
 	KIWI_FreeQueue(scheduler->queueNormal);
 	KIWI_FreeQueue(scheduler->queueHigh);
+
+	KIWI_FreeQueue(scheduler->queueReadyFibers);
 
 	KIWI_FreeFiberPool(scheduler->fiberPool);
 

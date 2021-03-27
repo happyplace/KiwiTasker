@@ -29,6 +29,9 @@ typedef struct KIWI_SchedulerParams
 
 	// max amount of task counters
 	int countersCapacity;
+
+	// max amount of fibers that can be waiting on a counter
+	int waitingFiberCapacity;
 } KIWI_SchedulerParams;
 
 // this will populate params with default values. These defaults can be used to further tweak options
