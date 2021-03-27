@@ -28,7 +28,7 @@ KIWI_Fiber* KIWI_GetFiberElement(KIWI_FiberPool* pool, int index)
 }
 
 // creates a pool of fibers of size poolSize. The Object returned by this function needs to be freed with KIWI_FreeFiberPool
-struct KIWI_FiberPool* KIWI_CreateFiberPool(int poolSize)
+struct KIWI_FiberPool* KIWI_CreateFiberPool(int poolSize, int stackSize)
 {
 	KIWI_ASSERT(poolSize >= 1 && "pool size has to be greater than zero");
 
@@ -52,11 +52,12 @@ struct KIWI_FiberPool* KIWI_CreateFiberPool(int poolSize)
 	for (int i = 0; i < poolSize - 1; ++i)
 	{		
 		KIWI_Fiber* element = KIWI_GetFiberElement(fiberPool, i);
-		// create stack space
+		element->stack = create_fcontext_stack(stackSize);
 		element->next = KIWI_GetFiberElement(fiberPool, i + 1);		
 	}
 
 	KIWI_Fiber* last = KIWI_GetFiberElement(fiberPool, poolSize - 1);
+	last->stack = create_fcontext_stack(stackSize);
 	last->next = NULL;
 
 	fiberPool->firstFree = KIWI_GetFiberElement(fiberPool, 0);
@@ -71,8 +72,8 @@ void KIWI_FreeFiberPool(struct KIWI_FiberPool* fiberPool)
 
 	for (int i = 0; i < fiberPool->poolSize; ++i)
 	{		
-		//KIWI_FiberElement* element = KIWI_GetFiberElement(fiberPool, i);
-		// free stack space
+		KIWI_Fiber* element = KIWI_GetFiberElement(fiberPool, i);
+		destroy_fcontext_stack(&element->stack);
 	}
 
 	KIWI_FreeSpinLock(fiberPool->lock);

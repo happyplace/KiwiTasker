@@ -1,5 +1,7 @@
 #pragma once
 
+#include "fcontext/fcontext.h"
+
 #include "kiwi/KIWI_Job.h"
 
 #ifdef __cplusplus
@@ -12,13 +14,15 @@ typedef struct KIWI_Fiber
 {  
     KIWI_Job job;
     struct KIWI_Counter* counter;
+    fcontext_stack_t stack;
+    fcontext_t context;
     struct KIWI_Fiber* next;    
 } KIWI_Fiber;
 
 struct KIWI_FiberPool;
 
 // creates a pool of fibers of size poolSize. The Object returned by this function needs to be freed with KIWI_FreeFiberPool
-struct KIWI_FiberPool* KIWI_CreateFiberPool(int poolSize);
+struct KIWI_FiberPool* KIWI_CreateFiberPool(int poolSize, int stackSize);
 
 // frees all memory associated with a fiber pool
 void KIWI_FreeFiberPool(struct KIWI_FiberPool* fiberPool);

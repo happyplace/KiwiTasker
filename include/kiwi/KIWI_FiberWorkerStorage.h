@@ -9,12 +9,14 @@ extern "C" {
 
 struct KIWI_ThreadImpl;
 struct KIWI_Scheduler;
+struct KIWI_Fiber;
 
 typedef struct KIWI_FiberWorkerStorage
 {
     struct KIWI_ThreadImpl* threadImpl;    
     struct KIWI_Scheduler* scheduler;
     atomic_bool* quitWorkerThreads;
+    struct KIWI_Fiber* fiber;
 } KIWI_FiberWorkerStorage;
 
 void KIWI_CreateFiberWorkerStorage(int cpuCount);

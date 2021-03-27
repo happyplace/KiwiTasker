@@ -22,6 +22,9 @@ typedef struct KIWI_SchedulerParams
 
 	// this is the max amount of jobs you can have running or waiting on counters to complete
 	int fiberPoolSize;
+
+	// the stack size to use for fibers
+	int fiberStackSize;
 } KIWI_SchedulerParams;
 
 // this will populate params with default values. These defaults can be used to further tweak options

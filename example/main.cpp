@@ -38,25 +38,42 @@ void TheSuperSuperTest(KIWI_Scheduler* scheduler, void* arg)
         Microsoft::WRL::ComPtr<ID3D12Debug> debugController;
         D3D12GetDebugInterface(IID_PPV_ARGS(&debugController));
         debugController->EnableDebugLayer();
+        printf("Directx 12 Test Passed\n");
     }
 #endif // defined(DEBUG) || defined(_DEBUG)
 }
 
-//void DxTest(fcontext_transfer_t t)
-//{
-//    printf("we do the test\n");
-//    TheSuperSuperTest();
-//    jump_fcontext(t.ctx, NULL);
-//}
+struct PrintJobData
+{
+    int num = 0;
+};
+
+void TestPrintJob(KIWI_Scheduler* scheduler, void* arg)
+{
+    (void)scheduler;
+    PrintJobData* data = reinterpret_cast<PrintJobData*>(arg);
+
+    printf("TestPrintJob: %i\n", data->num);    
+}
 
 void TestJob(KIWI_Scheduler* scheduler, void* arg)
 {
-    (void)scheduler;
-    printf("Hello There!\n");
-    printf("message: %s\n", (char*)arg);
-}
+    (void)arg;
+    KIWI_Job jobs[10];
+    PrintJobData datas[10];
 
-#include <malloc.h>
+    for (int i = 0; i < 10; ++i)
+    {
+        datas[i].num = 9001 + i;
+
+        jobs[i].entry = TestPrintJob;
+        jobs[i].arg = &datas[i];
+    }
+
+    printf("TestJob - Start\n");
+    KIWI_SchedulerAddJobs(scheduler, jobs, 10, KIWI_JobPriority_Normal);
+    printf("TestJob - End\n");
+}
 
 //int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/, PSTR /*lpCmdLine*/, int /*nCmdShow*/)
 int main(int /*argc*/, char** /*argv*/)
@@ -78,6 +95,11 @@ int main(int /*argc*/, char** /*argv*/)
     KIWI_Job job;
     job.entry = TheSuperSuperTest;
     job.arg = &testData;
+
+    KIWI_SchedulerAddJob(scheduler, &job, KIWI_JobPriority_Normal);
+
+    job.entry = TestJob;
+    job.arg = NULL;
 
     KIWI_SchedulerAddJob(scheduler, &job, KIWI_JobPriority_Normal);
 

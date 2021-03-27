@@ -47,7 +47,7 @@ set(kiwi-tasker-src ${kiwi-tasker-src}
 )
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-	add_definitions(-DKIWI_USE_WINTHREAD_IMPL)
+	add_definitions(-DKIWI_USE_WINTHREAD_IMPL)	
 	set(kiwi-tasker-src ${kiwi-tasker-src}
 		"include/kiwi/KIWI_ThreadImplWinThread.h"
 		"src/KIWI_ThreadImplWinThread.c"
@@ -62,6 +62,9 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 	)
 endif()
 
+include_directories("external/deboost.context/include")
+add_subdirectory("external/deboost.context")
+
 find_package (Threads REQUIRED)
 
 add_library(KiwiTasker SHARED ${kiwi-tasker-src})
@@ -70,3 +73,4 @@ set_property(TARGET KiwiTasker PROPERTY C_STANDARD 11)
 set_property(TARGET KiwiTasker PROPERTY C_STANDARD_REQUIRED ON)
 
 target_link_libraries(KiwiTasker Threads::Threads)
+target_link_libraries(KiwiTasker fcontext)

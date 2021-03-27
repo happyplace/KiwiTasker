@@ -37,12 +37,11 @@ void KIWI_DefaultSchedulerParams(KIWI_SchedulerParams* params)
 	params->jobQueueSize = 1024;
 	params->workerCount = KIWI_ThreadImplGetCpuCount();
 	params->fiberPoolSize = 512;
+	params->fiberStackSize = 512 * 1024;
 }
 
 bool KIWI_SchedulerGetNextFiber(KIWI_Scheduler* scheduler, KIWI_Fiber** outFiber, bool* outResumeFiber)
 {
-	(void)outFiber;
-
 	(*outResumeFiber) = false;
 
 	KIWI_LockSpinLock(scheduler->queueLock);
@@ -96,6 +95,19 @@ bool KIWI_SchedulerGetNextFiber(KIWI_Scheduler* scheduler, KIWI_Fiber** outFiber
 	}
 }
 
+void KIWI_FiberEntry(fcontext_transfer_t t)
+{
+	KIWI_FiberWorkerStorage* workerStorage = KIWI_GetFiberWorkerStorage(KIWI_ThreadImplGetWorkerThreadIndex());
+	KIWI_ASSERT(workerStorage);
+	
+	KIWI_Fiber* fiber = workerStorage->fiber;
+	KIWI_ASSERT(fiber);
+
+	fiber->job.entry(workerStorage->scheduler, fiber->job.arg);
+	
+	jump_fcontext(t.ctx, NULL);
+}
+
 WORKER_THREAD_DEFINITION(arg)
 {
 	KIWI_ALLOW_UNUSED(arg);
@@ -110,7 +122,16 @@ WORKER_THREAD_DEFINITION(arg)
 		bool resumeFiber = false;
 		if (KIWI_SchedulerGetNextFiber(workerStorage->scheduler, &fiber, &resumeFiber))
 		{
-			fiber->job.entry(workerStorage->scheduler, fiber->job.arg);
+			workerStorage->fiber = fiber;
+			
+			fiber->context = make_fcontext(fiber->stack.sptr, fiber->stack.ssize, KIWI_FiberEntry);
+
+			// make the jump, see you on the other side
+			jump_fcontext(fiber->context, NULL);
+
+			// we could be returning on a different thread, refresh worker storage
+			workerStorage = KIWI_GetFiberWorkerStorage(KIWI_ThreadImplGetWorkerThreadIndex());
+
 			KIWI_FiberPoolReturn(workerStorage->scheduler->fiberPool, fiber);
 		}
 
@@ -163,7 +184,7 @@ KIWI_Scheduler* KIWI_CreateScheduler(const KIWI_SchedulerParams* params)
 		cpuCount = params->workerCount;
 	}
 	
-	scheduler->fiberPool = KIWI_CreateFiberPool(params->fiberPoolSize);
+	scheduler->fiberPool = KIWI_CreateFiberPool(params->fiberPoolSize, params->fiberStackSize);
 
 	KIWI_CreateFiberWorkerStorage(cpuCount);
 	for (int i = 0; i < cpuCount; ++i)
