@@ -34,6 +34,7 @@ set(kiwi-tasker-src
 	"include/kiwi/KIWI_FiberWorkerStorage.h"
 	"include/kiwi/KIWI_SpinLock.h"
 	"include/kiwi/KIWI_JobPriority.h"
+	"include/kiwi/KIWI_FiberPool.h"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
@@ -41,6 +42,7 @@ set(kiwi-tasker-src ${kiwi-tasker-src}
 	"src/KIWI_Queue.c"
 	"src/KIWI_FiberWorkerStorage.c"
 	"src/KIWI_SpinLock.c"
+	"src/KIWI_FiberPool.c"
 )
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")

@@ -17,6 +17,9 @@ typedef struct KIWI_SchedulerParams
 	// setting a value higher than the physical cpu count or a value lower than one will be ignored, and will instead use the phyiscal cpu count.
 	// KIWI_DefaultSchedulerParams will set this value to the physical cpu count
 	int workerCount;
+
+	// this is the max amount of jobs you can have running or waiting on counters to complete
+	int fiberPoolSize;
 } KIWI_SchedulerParams;
 
 // this will populate params with default values. These defaults can be used to further tweak options
