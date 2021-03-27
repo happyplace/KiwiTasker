@@ -6,10 +6,13 @@
 extern "C" {
 #endif
 
+struct KIWI_Counter;
+
 typedef struct KIWI_Fiber
 {  
     KIWI_Job job;
-    struct KIWI_Fiber* next;
+    struct KIWI_Counter* counter;
+    struct KIWI_Fiber* next;    
 } KIWI_Fiber;
 
 struct KIWI_FiberPool;

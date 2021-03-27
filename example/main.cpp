@@ -7,6 +7,7 @@
 #include "kiwi/KIWI_Scheduler.h"
 
 #include "kiwi/KIWI_Queue.h"
+#include "kiwi/KIWI_Job.h"
 
 #include <d3d12.h>
 #include <dxgi1_4.h>
@@ -19,17 +20,27 @@
 #include <crtdbg.h>
 #endif // defined(DEBUG) || defined(_DEBUG)
 
-//void TheSuperSuperTest()
-//{
-//#if defined(DEBUG) || defined(_DEBUG)
-//    // Enable the D3D12 debug layer.
-//    {
-//        Microsoft::WRL::ComPtr<ID3D12Debug> debugController;
-//        D3D12GetDebugInterface(IID_PPV_ARGS(&debugController));
-//        debugController->EnableDebugLayer();
-//    }
-//#endif // defined(DEBUG) || defined(_DEBUG)
-//}
+struct TestData
+{
+    int num1 = 0;
+    int num2 = 0;
+};
+
+void TheSuperSuperTest(KIWI_Scheduler* scheduler, void* arg)
+{
+    (void)scheduler;
+    TestData* data = reinterpret_cast<TestData*>(arg);
+    (void)data;
+
+#if defined(DEBUG) || defined(_DEBUG)
+    // Enable the D3D12 debug layer.
+    {
+        Microsoft::WRL::ComPtr<ID3D12Debug> debugController;
+        D3D12GetDebugInterface(IID_PPV_ARGS(&debugController));
+        debugController->EnableDebugLayer();
+    }
+#endif // defined(DEBUG) || defined(_DEBUG)
+}
 
 //void DxTest(fcontext_transfer_t t)
 //{
@@ -37,11 +48,6 @@
 //    TheSuperSuperTest();
 //    jump_fcontext(t.ctx, NULL);
 //}
-
-typedef struct KIWI_Job
-{
-    int dummy;
-} KIWI_Job;
 
 void TestJob(KIWI_Scheduler* scheduler, void* arg)
 {
@@ -65,7 +71,17 @@ int main(int /*argc*/, char** /*argv*/)
 
     KIWI_Scheduler* scheduler = KIWI_CreateScheduler(&params);
 
-    //Sleep(1500);
+    TestData testData;
+    testData.num1 = 8001;
+    testData.num2 = 1337;
+
+    KIWI_Job job;
+    job.entry = TheSuperSuperTest;
+    job.arg = &testData;
+
+    KIWI_SchedulerAddJob(scheduler, &job, KIWI_JobPriority_Normal);
+
+    Sleep(1500);
 
     KIWI_FreeScheduler(scheduler);
 
