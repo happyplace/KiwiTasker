@@ -48,7 +48,7 @@ void KIWI_ThreadImplSignalWorkerThreadsToQuit(struct KIWI_ThreadImpl* threadImpl
 
 // returns the index of the worker.
 // WARNING: this only works from kiwi worker threads, calling from other threads will have unexpected results
-extern DECLSPEC int KIWI_ThreadImplGetWorkerThreadIndex();
+int KIWI_ThreadImplGetWorkerThreadIndex();
 
 #ifdef __cplusplus
 }
