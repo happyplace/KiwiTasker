@@ -10,6 +10,7 @@
 #include "kiwi/KIWI_Job.h"
 #include "kiwi/KIWI_FiberPool.h"
 #include "kiwi/KIWI_Counter.h"
+#include "kiwi/KIWI_Array.h"
 
 typedef struct KIWI_Scheduler
 {
@@ -22,12 +23,20 @@ typedef struct KIWI_Scheduler
 	struct KIWI_Queue* queueHigh;
 
 	struct KIWI_FiberPool* fiberPool;
+
+	struct KIWI_SpinLock* counterLock;
+	struct KIWI_Array* counters;
 } KIWI_Scheduler;
+
+typedef struct KIWI_CounterContainer
+{
+	struct KIWI_Counter* counter;
+} KIWI_CounterContainer;
 
 typedef struct KIWI_PendingJob
 {
 	KIWI_Job job;
-	struct KIWI_Counter* counter;
+	struct KIWI_CounterContainer counter;
 } KIWI_PendingJob;
 
 void KIWI_DefaultSchedulerParams(KIWI_SchedulerParams* params)
@@ -38,6 +47,7 @@ void KIWI_DefaultSchedulerParams(KIWI_SchedulerParams* params)
 	params->workerCount = KIWI_ThreadImplGetCpuCount();
 	params->fiberPoolSize = 512;
 	params->fiberStackSize = 512 * 1024;
+	params->countersCapacity = 25;
 }
 
 bool KIWI_SchedulerGetNextFiber(KIWI_Scheduler* scheduler, KIWI_Fiber** outFiber, bool* outResumeFiber)
@@ -55,7 +65,7 @@ bool KIWI_SchedulerGetNextFiber(KIWI_Scheduler* scheduler, KIWI_Fiber** outFiber
 		KIWI_Fiber* fiber = KIWI_FiberPoolGet(scheduler->fiberPool);
 		(*outFiber) = fiber;
 		fiber->job = pendingJob.job;
-		fiber->counter = pendingJob.counter;
+		fiber->counter = pendingJob.counter.counter;
 
 		KIWI_UnlockSpinLock(scheduler->queueLock);
 		return true;		
@@ -69,7 +79,7 @@ bool KIWI_SchedulerGetNextFiber(KIWI_Scheduler* scheduler, KIWI_Fiber** outFiber
 		KIWI_Fiber* fiber = KIWI_FiberPoolGet(scheduler->fiberPool);
 		(*outFiber) = fiber;
 		fiber->job = pendingJob.job;
-		fiber->counter = pendingJob.counter;
+		fiber->counter = pendingJob.counter.counter;
 
 		KIWI_UnlockSpinLock(scheduler->queueLock);
 		return true;
@@ -83,7 +93,7 @@ bool KIWI_SchedulerGetNextFiber(KIWI_Scheduler* scheduler, KIWI_Fiber** outFiber
 		KIWI_Fiber* fiber = KIWI_FiberPoolGet(scheduler->fiberPool);
 		(*outFiber) = fiber;
 		fiber->job = pendingJob.job;
-		fiber->counter = pendingJob.counter;
+		fiber->counter = pendingJob.counter.counter;
 
 		KIWI_UnlockSpinLock(scheduler->queueLock);
 		return true;
@@ -131,6 +141,13 @@ WORKER_THREAD_DEFINITION(arg)
 
 			// we could be returning on a different thread, refresh worker storage
 			workerStorage = KIWI_GetFiberWorkerStorage(KIWI_ThreadImplGetWorkerThreadIndex());
+
+			if (fiber->counter)
+			{
+				int value = KIWI_DecrementCounter(fiber->counter);
+				// TODO: check if any available
+				(void)value;
+			}
 
 			KIWI_FiberPoolReturn(workerStorage->scheduler->fiberPool, fiber);
 		}
@@ -186,6 +203,9 @@ KIWI_Scheduler* KIWI_CreateScheduler(const KIWI_SchedulerParams* params)
 	
 	scheduler->fiberPool = KIWI_CreateFiberPool(params->fiberPoolSize, params->fiberStackSize);
 
+	scheduler->counterLock = KIWI_CreateSpinLock();
+	scheduler->counters = KIWI_CreateArray(sizeof(struct KIWI_CounterContainer), params->countersCapacity);
+
 	KIWI_CreateFiberWorkerStorage(cpuCount);
 	for (int i = 0; i < cpuCount; ++i)
 	{
@@ -217,18 +237,53 @@ void KIWI_FreeScheduler(KIWI_Scheduler* scheduler)
 
 	KIWI_FreeFiberPool(scheduler->fiberPool);
 
+	KIWI_FreeSpinLock(scheduler->counterLock);
+	KIWI_FreeArray(scheduler->counters);
+
 	free(scheduler);
 }
 
-void KIWI_SchedulerAddJob(struct KIWI_Scheduler* scheduler, const struct KIWI_Job* job, const KIWI_JobPriority priority)
+void KIWI_SchedulerAddJob(struct KIWI_Scheduler* scheduler, const struct KIWI_Job* job, const KIWI_JobPriority priority, struct KIWI_Counter** counter)
 {
 	KIWI_ASSERT(scheduler);
 	KIWI_ASSERT(job);
 
-	KIWI_SchedulerAddJobs(scheduler, job, 1, priority);
+	KIWI_SchedulerAddJobs(scheduler, job, 1, priority, counter);
 }
 
-void KIWI_SchedulerAddJobs(struct KIWI_Scheduler* scheduler, const struct KIWI_Job* job, const int jobCount, const KIWI_JobPriority priority)
+struct KIWI_Counter* KIWI_SchedulerCreateCounter(struct KIWI_Scheduler* scheduler)
+{
+	KIWI_ASSERT(scheduler);
+
+	struct KIWI_Counter* counter = KIWI_CreateCounter();
+	KIWI_LockSpinLock(scheduler->counterLock);
+	KIWI_ArrayAddItem(scheduler->counters, &counter);
+	KIWI_UnlockSpinLock(scheduler->counterLock);
+	return counter;
+}
+
+void KIWI_SchedulerFreeCounter(struct KIWI_Scheduler* scheduler, struct KIWI_Counter* counter)
+{
+	KIWI_ASSERT(scheduler);
+	KIWI_ASSERT(counter);
+
+	KIWI_LockSpinLock(scheduler->counterLock);
+	int size = KIWI_ArraySize(scheduler->counters);
+	for (int i = 0; i < size; ++i)
+	{
+		KIWI_CounterContainer* container = KIWI_ArrayGet(scheduler->counters, i);
+		if (container->counter == counter)
+		{
+			KIWI_ArrayRemoveItem(scheduler->counters, i);
+			KIWI_FreeCounter(counter);
+		}
+	}
+
+	KIWI_ArrayAddItem(scheduler->counters, &counter);
+	KIWI_UnlockSpinLock(scheduler->counterLock);
+}
+
+void KIWI_SchedulerAddJobs(struct KIWI_Scheduler* scheduler, const struct KIWI_Job* job, const int jobCount, const KIWI_JobPriority priority, struct KIWI_Counter** outCounter)
 {	
 	KIWI_ASSERT(scheduler);
 	KIWI_ASSERT(job);
@@ -252,13 +307,33 @@ void KIWI_SchedulerAddJobs(struct KIWI_Scheduler* scheduler, const struct KIWI_J
 		break;
 	}
 
+	struct KIWI_Counter* counter = NULL;
+	if (outCounter != NULL)
+	{
+		if ((*outCounter) != NULL)
+		{
+			// they're reusing a counter so we don't need to create one
+			counter = (*outCounter);
+		}
+		else
+		{
+			counter = KIWI_SchedulerCreateCounter(scheduler);
+			(*outCounter) = counter;
+		}
+	}
+
 	KIWI_LockSpinLock(scheduler->queueLock);
 	for (int i = 0; i < jobCount; ++i)
 	{
 		KIWI_PendingJob pendingJob;
 		memcpy(&pendingJob.job, ((char*)job + (sizeof(KIWI_Job) * i)), sizeof(KIWI_Job));
-		pendingJob.counter = NULL;
+		pendingJob.counter.counter = counter;
 		KIWI_QueuePush(queue, &pendingJob);
+		
+		if (counter)
+		{
+			KIWI_IncrementCounter(counter);
+		}
 	}
 	KIWI_UnlockSpinLock(scheduler->queueLock);
 

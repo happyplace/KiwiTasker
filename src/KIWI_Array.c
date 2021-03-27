@@ -101,3 +101,10 @@ void KIWI_ArrayRemoveItem(struct KIWI_Array* dArray, int index)
 
 	dArray->size--;
 }
+
+int KIWI_ArraySize(struct KIWI_Array* dArray)
+{
+	KIWI_ASSERT(dArray);
+
+	return dArray->size;
+}

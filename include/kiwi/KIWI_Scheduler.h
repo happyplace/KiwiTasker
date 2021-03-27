@@ -9,6 +9,7 @@ extern "C" {
 
 struct KIWI_Scheduler;
 struct KIWI_Job;
+struct KIWI_Counter;
 
 typedef struct KIWI_SchedulerParams
 {
@@ -25,6 +26,9 @@ typedef struct KIWI_SchedulerParams
 
 	// the stack size to use for fibers
 	int fiberStackSize;
+
+	// max amount of task counters
+	int countersCapacity;
 } KIWI_SchedulerParams;
 
 // this will populate params with default values. These defaults can be used to further tweak options
@@ -39,12 +43,17 @@ extern DECLSPEC struct KIWI_Scheduler* KIWI_CreateScheduler(const KIWI_Scheduler
 extern DECLSPEC void KIWI_FreeScheduler(struct KIWI_Scheduler* scheduler);
 
 // Adds the job to the job queue at priority level. A copy of the job is kept so it's safe to delete the job definition. Any memory used by the argument
-// needs to be valid until the job completes.
-extern DECLSPEC void KIWI_SchedulerAddJob(struct KIWI_Scheduler* scheduler, const struct KIWI_Job* job, const KIWI_JobPriority priority);
+// needs to be valid until the job completes. 
+// If counter is not NULL a counter will be created and used to track the job completion
+extern DECLSPEC void KIWI_SchedulerAddJob(struct KIWI_Scheduler* scheduler, const struct KIWI_Job* job, const KIWI_JobPriority priority, struct KIWI_Counter** counter);
 
 // Adds the jobs to the job queue at priority level. A copy of the job is kept so it's safe to delete the job definitions but any memory used by the argument 
 // needs to be valid until the jobs completes.
-extern DECLSPEC void KIWI_SchedulerAddJobs(struct KIWI_Scheduler* scheduler, const struct KIWI_Job* job, const int jobCount, const KIWI_JobPriority priority);
+// If counter is not NULL a counter will be created and used to track the jobs completion
+extern DECLSPEC void KIWI_SchedulerAddJobs(struct KIWI_Scheduler* scheduler, const struct KIWI_Job* job, const int jobCount, const KIWI_JobPriority priority, struct KIWI_Counter** counter);
+
+// frees a counter, this is only necessarily if you don't use WaitForCounterAndFree
+extern DECLSPEC void KIWI_SchedulerFreeCounter(struct KIWI_Scheduler* scheduler, struct KIWI_Counter* outCounter);
 
 #ifdef __cplusplus
 }

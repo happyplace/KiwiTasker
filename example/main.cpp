@@ -71,7 +71,8 @@ void TestJob(KIWI_Scheduler* scheduler, void* arg)
     }
 
     printf("TestJob - Start\n");
-    KIWI_SchedulerAddJobs(scheduler, jobs, 10, KIWI_JobPriority_Normal);
+    KIWI_Counter* counter = NULL;
+    KIWI_SchedulerAddJobs(scheduler, jobs, 10, KIWI_JobPriority_Normal, &counter);  
     printf("TestJob - End\n");
 }
 
@@ -96,40 +97,18 @@ int main(int /*argc*/, char** /*argv*/)
     job.entry = TheSuperSuperTest;
     job.arg = &testData;
 
-    KIWI_SchedulerAddJob(scheduler, &job, KIWI_JobPriority_Normal);
+    KIWI_SchedulerAddJob(scheduler, &job, KIWI_JobPriority_Normal, NULL);
 
     job.entry = TestJob;
     job.arg = NULL;
 
-    KIWI_SchedulerAddJob(scheduler, &job, KIWI_JobPriority_Normal);
+    KIWI_Counter* counter = NULL;
+    KIWI_SchedulerAddJob(scheduler, &job, KIWI_JobPriority_Normal, &counter);
+    KIWI_SchedulerFreeCounter(scheduler, counter);
 
     Sleep(1500);
 
     KIWI_FreeScheduler(scheduler);
 
-    //fcontext_stack_t s = create_fcontext_stack(16 * 1024);
-
-    //fcontext_t ctx = make_fcontext(s.sptr, s.ssize, DxTest);
-    //jump_fcontext(ctx, NULL);
-    //printf("we got back\n");
-
-    //atomic_llong testValue;
-    //atomic_store(&testValue, 0);
-
-    //long long value = atomic_load(&testValue);
-    //printf("Value: %llu \n", value);
-
-    //atomic_flag flag = ATOMIC_FLAG_INIT;
-
-    //while (atomic_flag_test_and_set(&flag))
-    //    ;
-    //value = atomic_fetch_add(&testValue, 1);
-    //printf("Value: got the flag %llu \n", value);
-    //atomic_flag_clear(&flag);
-
-    //value = atomic_load(&testValue);
-    //printf("Value: %llu \n", value);
-
-    //printf("we atleast compile\n");
     return 0;
 }

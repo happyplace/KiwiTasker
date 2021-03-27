@@ -24,6 +24,8 @@ bool KIWI_ArrayIsEmpty(struct KIWI_Array* dArray);
 // returns true if the queue is full
 bool KIWI_ArrayIsFull(struct KIWI_Array* dArray);
 
+int KIWI_ArraySize(struct KIWI_Array* dArray);
+
 // add item to end of array
 void KIWI_ArrayAddItem(struct KIWI_Array* dArray, void* value);
 
