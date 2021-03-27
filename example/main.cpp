@@ -64,6 +64,9 @@ int main(int /*argc*/, char** /*argv*/)
     KIWI_DefaultSchedulerParams(&params);
 
     KIWI_Scheduler* scheduler = KIWI_CreateScheduler(&params);
+
+    //Sleep(1500);
+
     KIWI_FreeScheduler(scheduler);
 
     //fcontext_stack_t s = create_fcontext_stack(16 * 1024);

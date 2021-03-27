@@ -31,11 +31,13 @@ set(kiwi-tasker-src
 	"include/kiwi/KIWI_Queue.h"
 	"include/kiwi/KIWI_Job.h"
 	"include/kiwi/KIWI_ThreadImpl.h"
+	"include/kiwi/KIWI_FiberWorkerStorage.h"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
 	"src/KIWI_Scheduler.c"
 	"src/KIWI_Queue.c"
+	"src/KIWI_FiberWorkerStorage.c"
 )
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")

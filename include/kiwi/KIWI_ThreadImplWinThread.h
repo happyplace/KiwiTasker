@@ -1,6 +1,7 @@
 #pragma once
 
-#include <kiwi/KIWI_Std.h>
+#include "kiwi/KIWI_Std.h"
+#include "kiwi/KIWI_Atomics.h"
 
 // reduce the amount of windows libraries linked
 #define WIN32_LEAN_AND_MEAN 
@@ -31,6 +32,19 @@ void KIWI_ThreadImplBlockSignalsOnWorkerThread();
 
 // returns the physical count of cpus report by the system
 int KIWI_ThreadImplGetCpuCount();
+
+// wakes up one worker thread that is sleeping.
+void KIWI_ThreadImplNotifyOneWorkerThread(struct KIWI_ThreadImpl* threadImpl);
+
+// wakes up all worker threads that are sleeping.
+void KIWI_ThreadImplNotifyAllWorkerThreads(struct KIWI_ThreadImpl* threadImpl);
+
+// sleeps worker thread until a new job is added to the queue
+void KIWI_ThreadImplSleepUntilJobAdded(struct KIWI_ThreadImpl* threadImpl, atomic_bool* quitWorkerThreads);
+
+// change flag to signal that worker threads should shutdown.
+// WARNING: this will grab a mutex
+void KIWI_ThreadImplSignalWorkerThreadsToQuit(struct KIWI_ThreadImpl* threadImpl, atomic_bool* quitWorkerThreads);
 
 // returns the index of the worker.
 // WARNING: this only works from kiwi worker threads, calling from other threads will have unexpected results

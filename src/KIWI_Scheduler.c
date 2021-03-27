@@ -3,10 +3,13 @@
 #include <malloc.h>
 
 #include "kiwi/KIWI_ThreadImpl.h"
+#include "kiwi/KIWI_FiberWorkerStorage.h"
+#include "kiwi/KIWI_Atomics.h"
 
 typedef struct KIWI_Scheduler
 {
 	struct KIWI_ThreadImpl* threadImpl;
+	atomic_bool quitWorkerThreads;
 } KIWI_Scheduler;
 
 void KIWI_DefaultSchedulerParams(KIWI_SchedulerParams* params)
@@ -17,15 +20,18 @@ void KIWI_DefaultSchedulerParams(KIWI_SchedulerParams* params)
 	params->workerCount = KIWI_ThreadImplGetCpuCount();
 }
 
-#include <stdio.h>
-
 WORKER_THREAD_DEFINITION(arg)
 {
-	(void)arg;
+	KIWI_ALLOW_UNUSED(arg);
 
 	KIWI_ThreadImplBlockSignalsOnWorkerThread();
 
-	printf("started worker thread\n");
+	KIWI_FiberWorkerStorage* workerStorage = KIWI_GetFiberWorkerStorage(KIWI_ThreadImplGetWorkerThreadIndex());
+
+	while (!atomic_load(workerStorage->quitWorkerThreads))
+	{
+		KIWI_ThreadImplSleepUntilJobAdded(workerStorage->threadImpl, workerStorage->quitWorkerThreads);
+	}
 
 	WORKER_THREAD_RETURN_STATEMENT;
 }
@@ -45,6 +51,15 @@ KIWI_Scheduler* KIWI_CreateScheduler(KIWI_SchedulerParams* params)
 		cpuCount = params->workerCount;
 	}
 	
+	KIWI_CreateFiberWorkerStorage(cpuCount);
+	for (int i = 0; i < cpuCount; ++i)
+	{
+		KIWI_FiberWorkerStorage* workerStorage = KIWI_GetFiberWorkerStorage(i);
+		workerStorage->quitWorkerThreads = &scheduler->quitWorkerThreads;
+		workerStorage->scheduler = scheduler;
+	}
+
+	atomic_store(&scheduler->quitWorkerThreads, false);
 	scheduler->threadImpl = KIWI_ThreadImplCreateAndStartWorkerThreads(cpuCount, SchedulerWorkerThread);
 
 	return scheduler;
@@ -54,7 +69,11 @@ void KIWI_FreeScheduler(KIWI_Scheduler* scheduler)
 {
 	KIWI_ASSERT(scheduler);
 
+	KIWI_ThreadImplSignalWorkerThreadsToQuit(scheduler->threadImpl, &scheduler->quitWorkerThreads);
+	KIWI_ThreadImplNotifyAllWorkerThreads(scheduler->threadImpl);
 	KIWI_ThreadImplShutdownWorkerThreads(scheduler->threadImpl);
+
+	KIWI_DestroyFiberWorkerStorage();
 
 	free(scheduler);
 }

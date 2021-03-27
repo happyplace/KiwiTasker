@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include "kiwi/KIWI_Std.h"
+#include "kiwi/KIWI_FiberWorkerStorage.h"
 
 #define MS_VC_EXCEPTION 0x406D1388
 #define MS_CORES_PER_GROUP 64
@@ -26,6 +27,8 @@ typedef struct KIWI_ThreadImpl
 {
 	HANDLE* handles;
 	int workerCount;
+	CONDITION_VARIABLE workerCondVar;
+	CRITICAL_SECTION workerMutex;
 } KIWI_ThreadImpl;
 
 int KIWI_ThreadImplGetCpuCount()
@@ -33,6 +36,12 @@ int KIWI_ThreadImplGetCpuCount()
 	SYSTEM_INFO systemInfo;
 	GetSystemInfo(&systemInfo);
 	return (int)systemInfo.dwNumberOfProcessors;
+}
+
+void KIWI_ThreadImplCreateConditionalAndMutexVarialbe(KIWI_ThreadImpl* threadImpl)
+{
+	InitializeConditionVariable(&threadImpl->workerCondVar);
+	InitializeCriticalSection(&threadImpl->workerMutex);
 }
 
 struct KIWI_ThreadImpl* KIWI_ThreadImplCreateAndStartWorkerThreads(int workerCount, DWORD(*threadFunction) (LPVOID))
@@ -54,10 +63,15 @@ struct KIWI_ThreadImpl* KIWI_ThreadImplCreateAndStartWorkerThreads(int workerCou
 
 	threadImpl->workerCount = workerCount;
 
+	KIWI_ThreadImplCreateConditionalAndMutexVarialbe(threadImpl);
+
 	char threadNameBuffer[THREAD_NAME_BUFFER_SIZE];
 
 	for (int i = 0; i < workerCount; ++i)
 	{
+		KIWI_FiberWorkerStorage* workerStorage = KIWI_GetFiberWorkerStorage(i);
+		workerStorage->threadImpl = threadImpl;
+
 		DWORD threadId = 0;
 		threadImpl->handles[i] = CreateThread(NULL, 0, threadFunction, NULL, CREATE_SUSPENDED, &threadId);
 		if (threadImpl->handles[i] == NULL)
@@ -152,4 +166,38 @@ int KIWI_ThreadImplGetWorkerThreadIndex()
 
 	KIWI_ASSERT(!"Why is no cpu set, is this being called outside of a scheduler thread?");
 	return -1;
+}
+
+
+void KIWI_ThreadImplNotifyOneWorkerThread(struct KIWI_ThreadImpl* threadImpl)
+{
+	KIWI_ASSERT(threadImpl);
+
+	WakeConditionVariable(&threadImpl->workerCondVar);
+}
+
+void KIWI_ThreadImplNotifyAllWorkerThreads(struct KIWI_ThreadImpl* threadImpl)
+{
+	KIWI_ASSERT(threadImpl);
+
+	WakeAllConditionVariable(&threadImpl->workerCondVar);
+}
+
+void KIWI_ThreadImplSleepUntilJobAdded(struct KIWI_ThreadImpl* threadImpl, atomic_bool* quitWorkerThreads)
+{
+	KIWI_ASSERT(threadImpl);
+
+	EnterCriticalSection(&threadImpl->workerMutex);
+	if (!atomic_load(quitWorkerThreads))
+	{
+		SleepConditionVariableCS(&threadImpl->workerCondVar, &threadImpl->workerMutex, INFINITE);
+	}	
+	LeaveCriticalSection(&threadImpl->workerMutex);
+}
+
+void KIWI_ThreadImplSignalWorkerThreadsToQuit(struct KIWI_ThreadImpl* threadImpl, atomic_bool* quitWorkerThreads)
+{
+	EnterCriticalSection(&threadImpl->workerMutex);
+	atomic_store(quitWorkerThreads, true);
+	LeaveCriticalSection(&threadImpl->workerMutex);
 }

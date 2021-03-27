@@ -13,3 +13,5 @@
 #endif
 
 #define KIWI_ASSERT(exp) assert(exp)
+
+#define KIWI_ALLOW_UNUSED(var) (void)var
