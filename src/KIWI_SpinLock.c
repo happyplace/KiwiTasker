@@ -11,7 +11,7 @@ typedef struct KIWI_SpinLock
 } KIWI_SpinLock;
 
 // Creates a spin lock, the memory returned needs to be freed using KIWI_FreeSpinLock when done with the lock
-struct KIWI_SpinLock* KIWI_InitSpinLock()
+struct KIWI_SpinLock* KIWI_CreateSpinLock()
 {
 	KIWI_SpinLock* lock = malloc(sizeof(KIWI_SpinLock));
 	if (lock == NULL)
