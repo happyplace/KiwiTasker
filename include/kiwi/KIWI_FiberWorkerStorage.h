@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdbool.h>
+
 #include "kiwi/KIWI_Std.h"
 #include "kiwi/KIWI_Atomics.h"
 
@@ -17,6 +19,7 @@ typedef struct KIWI_FiberWorkerStorage
     struct KIWI_Scheduler* scheduler;
     atomic_bool* quitWorkerThreads;
     struct KIWI_Fiber* fiber;
+    bool completedFiber;
 } KIWI_FiberWorkerStorage;
 
 void KIWI_CreateFiberWorkerStorage(int cpuCount);

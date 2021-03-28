@@ -3,11 +3,12 @@
 #include <malloc.h>
 
 #include "kiwi/KIWI_Std.h"
-#include "kiwi/KIWI_Atomics.h"
+#include "kiwi/KIWI_SpinLock.h"
 
 typedef struct KIWI_Counter
 {
-	atomic_int value;
+	int value;
+	struct KIWI_SpinLock* lock;
 } KIWI_Counter;
 
 struct KIWI_Counter* KIWI_CreateCounter()
@@ -19,7 +20,8 @@ struct KIWI_Counter* KIWI_CreateCounter()
 		return NULL;
 	}
 
-	atomic_store(&counter->value, 0);
+	counter->value = 0;
+	counter->lock = KIWI_CreateSpinLock();
 
 	return counter;
 }
@@ -28,6 +30,7 @@ void KIWI_FreeCounter(struct KIWI_Counter* counter)
 {
 	KIWI_ASSERT(counter);
 
+	KIWI_FreeSpinLock(counter->lock);
 	free(counter);
 }
 
@@ -35,15 +38,34 @@ void KIWI_IncrementCounter(struct KIWI_Counter* counter)
 {
 	KIWI_ASSERT(counter);
 	
-	atomic_fetch_add(&counter->value, 1);
+	KIWI_LockSpinLock(counter->lock);
+	counter->value++;
+	KIWI_UnlockSpinLock(counter->lock);
 }
 
 int KIWI_DecrementCounter(struct KIWI_Counter* counter)
 {
 	KIWI_ASSERT(counter);
 
-	int value = atomic_fetch_sub(&counter->value, 1);
+	KIWI_LockSpinLock(counter->lock);
+	counter->value--;
+	int value = counter->value;
+	KIWI_UnlockSpinLock(counter->lock);
 
-	// we subtract one to the value because it returns the value it was BEFORE it was decremented
-	return value - 1;
+	return value;
+}
+
+int KIWI_CounterLockAndGetValue(struct KIWI_Counter* counter)
+{
+	KIWI_ASSERT(counter);
+
+	KIWI_LockSpinLock(counter->lock);
+	return counter->value;
+}
+
+void KIWI_CounterUnlock(struct KIWI_Counter* counter)
+{
+	KIWI_ASSERT(counter);
+
+	KIWI_UnlockSpinLock(counter->lock);
 }

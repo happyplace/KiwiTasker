@@ -13,6 +13,8 @@
 #include <dxgi1_4.h>
 #include <wrl.h>
 
+#include <atomic>
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
@@ -72,11 +74,37 @@ void TestJob(KIWI_Scheduler* scheduler, void* arg)
 
     printf("TestJob - Start\n");
     KIWI_Counter* counter = NULL;
-    KIWI_SchedulerAddJobs(scheduler, jobs, 10, KIWI_JobPriority_Normal, &counter);  
+    KIWI_SchedulerAddJobs(scheduler, jobs, 10, KIWI_JobPriority_Normal, &counter);
+    KIWI_SchedulerWaitForCounterAndFree(scheduler, counter, 0);
     printf("TestJob - End\n");
 }
 
-//int WINAPI WinMain(HINSTANCE /*hInstance*/, HINSTANCE /*hPrevInstance*/, PSTR /*lpCmdLine*/, int /*nCmdShow*/)
+void StartJobs(KIWI_Scheduler* scheduler, void* arg)
+{
+    std::atomic_bool* endApp = reinterpret_cast<std::atomic_bool*>(arg);
+
+    TestData testData;
+    testData.num1 = 8001;
+    testData.num2 = 1337;
+
+    KIWI_Job jobs[2];
+    jobs[0].entry = TheSuperSuperTest;
+    jobs[0].arg = &testData;
+
+    jobs[1].entry = TestJob;
+    jobs[1].arg = NULL;
+
+    KIWI_Counter* counter = NULL;
+    KIWI_SchedulerAddJobs(scheduler, jobs, 2, KIWI_JobPriority_Normal, &counter);
+    KIWI_SchedulerWaitForCounter(scheduler, counter, 0);
+
+    KIWI_SchedulerFreeCounter(scheduler, counter);
+
+    printf("StartJobs - End\n");
+
+    endApp->store(true);
+}
+
 int main(int /*argc*/, char** /*argv*/)
 {
     // Enable run-time memory check for debug builds.
@@ -89,24 +117,18 @@ int main(int /*argc*/, char** /*argv*/)
 
     KIWI_Scheduler* scheduler = KIWI_CreateScheduler(&params);
 
-    TestData testData;
-    testData.num1 = 8001;
-    testData.num2 = 1337;
+    std::atomic_bool quitApp;
+    quitApp.store(false);
 
-    KIWI_Job job;
-    job.entry = TheSuperSuperTest;
-    job.arg = &testData;
+    KIWI_Job startJob;
+    startJob.entry = StartJobs;
+    startJob.arg = &quitApp;
+    KIWI_SchedulerAddJob(scheduler, &startJob, KIWI_JobPriority_High, NULL);
 
-    KIWI_SchedulerAddJob(scheduler, &job, KIWI_JobPriority_Normal, NULL);
-
-    job.entry = TestJob;
-    job.arg = NULL;
-
-    KIWI_Counter* counter = NULL;
-    KIWI_SchedulerAddJob(scheduler, &job, KIWI_JobPriority_Normal, &counter);
-    KIWI_SchedulerFreeCounter(scheduler, counter);
-
-    Sleep(1500);
+    while (!quitApp.load())
+    {
+        Sleep(1000);
+    }
 
     KIWI_FreeScheduler(scheduler);
 

@@ -21,8 +21,10 @@ typedef struct KIWI_Scheduler
 	struct KIWI_Queue* queueLow;
 	struct KIWI_Queue* queueNormal;
 	struct KIWI_Queue* queueHigh;
-
 	struct KIWI_Queue* queueReadyFibers;
+
+	struct KIWI_SpinLock* waitingFibersLock;
+	struct KIWI_Array* waitingFibers;
 
 	struct KIWI_FiberPool* fiberPool;
 
@@ -40,6 +42,13 @@ typedef struct KIWI_PendingJob
 	KIWI_Job job;
 	struct KIWI_CounterContainer counter;
 } KIWI_PendingJob;
+
+typedef struct KIWI_WaitingFiber
+{
+	struct KIWI_Fiber* fiber;
+	struct KIWI_Counter* counter;
+	int targetValue;
+} KIWI_WaitingFiber;
 
 void KIWI_DefaultSchedulerParams(KIWI_SchedulerParams* params)
 {
@@ -125,16 +134,51 @@ bool KIWI_SchedulerGetNextFiber(KIWI_Scheduler* scheduler, KIWI_Fiber** outFiber
 }
 
 void KIWI_FiberEntry(fcontext_transfer_t t)
-{
+{	
 	KIWI_FiberWorkerStorage* workerStorage = KIWI_GetFiberWorkerStorage(KIWI_ThreadImplGetWorkerThreadIndex());
-	KIWI_ASSERT(workerStorage);
-	
 	KIWI_Fiber* fiber = workerStorage->fiber;
-	KIWI_ASSERT(fiber);
+	
+	fiber->context = t;
 
 	fiber->job.entry(workerStorage->scheduler, fiber->job.arg);
 	
-	jump_fcontext(t.ctx, NULL);
+	// updating worker storage and fiber because we could be on another thread now
+	workerStorage = KIWI_GetFiberWorkerStorage(KIWI_ThreadImplGetWorkerThreadIndex());
+	fiber = workerStorage->fiber;
+
+	workerStorage->completedFiber = true;
+	jump_fcontext(fiber->context.ctx, NULL);
+}
+
+void KIWI_AddFiberToReadyQueue(KIWI_Scheduler* scheduler, KIWI_Fiber* fiber)
+{
+	KIWI_LockSpinLock(scheduler->queueLock);
+	KIWI_QueuePush(scheduler->queueReadyFibers, &fiber);
+	KIWI_UnlockSpinLock(scheduler->queueLock);
+
+	KIWI_ThreadImplNotifyOneWorkerThread(scheduler->threadImpl);
+}
+
+void KIWI_CheckWaitingFibers(KIWI_Scheduler* scheduler, struct KIWI_Counter* counter, int value)
+{
+	KIWI_LockSpinLock(scheduler->waitingFibersLock);
+	int size = KIWI_ArraySize(scheduler->waitingFibers);
+	for (int i = 0; i < size; ++i)
+	{
+		KIWI_WaitingFiber* waitingFiber = KIWI_ArrayGet(scheduler->waitingFibers, i);
+		if (waitingFiber->counter == counter)
+		{
+			if (waitingFiber->targetValue == value)
+			{
+				KIWI_ArrayRemoveItem(scheduler->waitingFibers, i);
+				i--;
+				size--;
+
+				KIWI_AddFiberToReadyQueue(scheduler, waitingFiber->fiber);
+			}
+		}
+	}
+	KIWI_UnlockSpinLock(scheduler->waitingFibersLock);
 }
 
 WORKER_THREAD_DEFINITION(arg)
@@ -145,7 +189,7 @@ WORKER_THREAD_DEFINITION(arg)
 
 	KIWI_FiberWorkerStorage* workerStorage = KIWI_GetFiberWorkerStorage(KIWI_ThreadImplGetWorkerThreadIndex());
 
-	while (!atomic_load(workerStorage->quitWorkerThreads))
+	while (!atomic_load(KIWI_GetFiberWorkerStorage(KIWI_ThreadImplGetWorkerThreadIndex())->quitWorkerThreads))
 	{
 		KIWI_Fiber* fiber = NULL;
 		bool resumeFiber = false;
@@ -153,25 +197,48 @@ WORKER_THREAD_DEFINITION(arg)
 		{
 			workerStorage->fiber = fiber;
 			
-			fiber->context = make_fcontext(fiber->stack.sptr, fiber->stack.ssize, KIWI_FiberEntry);
-
-			// make the jump, see you on the other side
-			jump_fcontext(fiber->context, NULL);
-
-			// we could be returning on a different thread, refresh worker storage
-			workerStorage = KIWI_GetFiberWorkerStorage(KIWI_ThreadImplGetWorkerThreadIndex());
-
-			if (fiber->counter)
+			if (resumeFiber)
 			{
-				int value = KIWI_DecrementCounter(fiber->counter);
-				// TODO: check if any available
-				(void)value;
+				// we're going back in
+				fiber->context = jump_fcontext(fiber->context.ctx, NULL);
+			}
+			else
+			{
+				// this is a new fiber, we need to create new context 
+				fcontext_t fiberEntry = make_fcontext(fiber->stack.sptr, fiber->stack.ssize, KIWI_FiberEntry);
+
+				// make the jump, see you on the other side
+				fiber->context = jump_fcontext(fiberEntry, NULL);
 			}
 
-			KIWI_FiberPoolReturn(workerStorage->scheduler->fiberPool, fiber);
-		}
+			// we could be returning on a different thread, refresh worker storage and fiber
+			workerStorage = KIWI_GetFiberWorkerStorage(KIWI_ThreadImplGetWorkerThreadIndex());
+			fiber = workerStorage->fiber;
 
-		KIWI_ThreadImplSleepUntilJobAdded(workerStorage->threadImpl, workerStorage->quitWorkerThreads);
+			// if we're coming back here we need to check if the fiber actually completed
+			// if it didn't it's already been added to the waiting queue so we just do nothing and look for the next job
+			if (workerStorage->completedFiber)
+			{
+				if (fiber->counter)
+				{
+					int value = KIWI_DecrementCounter(fiber->counter);
+					KIWI_CheckWaitingFibers(workerStorage->scheduler, fiber->counter, value);
+				}
+
+				KIWI_FiberPoolReturn(workerStorage->scheduler->fiberPool, fiber);
+			}
+			else
+			{
+				// we can release the counter lock now because the fiber can be successfully resumed
+				struct KIWI_Counter* counter = fiber->context.data;
+				KIWI_CounterUnlock(counter);
+			}
+		}
+		else
+		{	
+			workerStorage = KIWI_GetFiberWorkerStorage(KIWI_ThreadImplGetWorkerThreadIndex());
+			KIWI_ThreadImplSleepUntilJobAdded(workerStorage->threadImpl, workerStorage->quitWorkerThreads);
+		}
 	}
 
 	WORKER_THREAD_RETURN_STATEMENT;
@@ -193,6 +260,9 @@ KIWI_Scheduler* KIWI_CreateScheduler(const KIWI_SchedulerParams* params)
 	scheduler->queueHigh = KIWI_CreateQueue(sizeof(KIWI_PendingJob), params->jobQueueSize);
 
 	scheduler->queueReadyFibers = KIWI_CreateQueue(sizeof(KIWI_Fiber*), params->waitingFiberCapacity);
+	
+	scheduler->waitingFibersLock = KIWI_CreateSpinLock();
+	scheduler->waitingFibers = KIWI_CreateArray(sizeof(KIWI_WaitingFiber), params->waitingFiberCapacity);
 
 	int cpuCount = KIWI_ThreadImplGetCpuCount();
 	if (params->workerCount < cpuCount && params->workerCount >= 1)
@@ -233,8 +303,10 @@ void KIWI_FreeScheduler(KIWI_Scheduler* scheduler)
 	KIWI_FreeQueue(scheduler->queueLow);
 	KIWI_FreeQueue(scheduler->queueNormal);
 	KIWI_FreeQueue(scheduler->queueHigh);
-
 	KIWI_FreeQueue(scheduler->queueReadyFibers);
+
+	KIWI_FreeSpinLock(scheduler->waitingFibersLock);
+	KIWI_FreeArray(scheduler->waitingFibers);
 
 	KIWI_FreeFiberPool(scheduler->fiberPool);
 
@@ -346,4 +418,46 @@ void KIWI_SchedulerAddJobs(struct KIWI_Scheduler* scheduler, const struct KIWI_J
 	{
 		KIWI_ThreadImplNotifyAllWorkerThreads(scheduler->threadImpl);
 	}
+}
+
+void KIWI_SchedulerWaitForCounterAndFree(struct KIWI_Scheduler* scheduler, struct KIWI_Counter* counter, int targetValue)
+{
+	KIWI_SchedulerWaitForCounter(scheduler, counter, targetValue);
+
+	// when we return the jobs should be complete so we can resume
+	KIWI_SchedulerFreeCounter(scheduler, counter);
+}
+
+void KIWI_SchedulerWaitForCounter(struct KIWI_Scheduler* scheduler, struct KIWI_Counter* counter, int targetValue)
+{
+	KIWI_ASSERT(scheduler);
+	KIWI_ASSERT(counter);
+	KIWI_ASSERT(targetValue >= 0);
+
+	KIWI_FiberWorkerStorage* workerStorage = KIWI_GetFiberWorkerStorage(KIWI_ThreadImplGetWorkerThreadIndex());
+
+	KIWI_WaitingFiber waitingFiber;
+	waitingFiber.fiber = workerStorage->fiber;
+	waitingFiber.targetValue = targetValue;
+	waitingFiber.counter = counter;
+
+	int counterValue = KIWI_CounterLockAndGetValue(counter);
+	if (counterValue == targetValue)
+	{
+		KIWI_CounterUnlock(counter);
+		return;
+	}
+	
+	KIWI_LockSpinLock(scheduler->waitingFibersLock);
+	KIWI_ArrayAddItem(scheduler->waitingFibers, &waitingFiber);
+	KIWI_UnlockSpinLock(scheduler->waitingFibersLock);
+
+	workerStorage->completedFiber = false;
+
+	// because the fiber's context is pointing at the context to return here we can't unlock the counter
+	// so we send the counter so we can unlock it when we get back to the worker thread main function.
+	fcontext_transfer_t returnTransfer = jump_fcontext(workerStorage->fiber->context.ctx, counter);
+
+	workerStorage = KIWI_GetFiberWorkerStorage(KIWI_ThreadImplGetWorkerThreadIndex());
+	workerStorage->fiber->context = returnTransfer;
 }

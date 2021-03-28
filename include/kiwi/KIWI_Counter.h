@@ -20,6 +20,12 @@ void KIWI_IncrementCounter(struct KIWI_Counter* counter);
 // This function is thread-safe
 int KIWI_DecrementCounter(struct KIWI_Counter* counter);
 
+// locks the counter and gets the current value, this should only be used when a job is being added to the waitList
+int KIWI_CounterLockAndGetValue(struct KIWI_Counter* counter);
+
+// this unlocks the counter. This should be called after the job has been added to the wait list
+void KIWI_CounterUnlock(struct KIWI_Counter* counter);
+
 #ifdef __cplusplus
 }
 #endif

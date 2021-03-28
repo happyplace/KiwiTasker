@@ -15,7 +15,7 @@ typedef struct KIWI_Fiber
     KIWI_Job job;
     struct KIWI_Counter* counter;
     fcontext_stack_t stack;
-    fcontext_t context;
+    fcontext_transfer_t context;
     struct KIWI_Fiber* next;    
 } KIWI_Fiber;
 

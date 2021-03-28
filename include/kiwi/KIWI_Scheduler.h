@@ -56,7 +56,18 @@ extern DECLSPEC void KIWI_SchedulerAddJob(struct KIWI_Scheduler* scheduler, cons
 extern DECLSPEC void KIWI_SchedulerAddJobs(struct KIWI_Scheduler* scheduler, const struct KIWI_Job* job, const int jobCount, const KIWI_JobPriority priority, struct KIWI_Counter** counter);
 
 // frees a counter, this is only necessarily if you don't use WaitForCounterAndFree
+// NOTE: do not free counters while there active jobs attached to it.
 extern DECLSPEC void KIWI_SchedulerFreeCounter(struct KIWI_Scheduler* scheduler, struct KIWI_Counter* outCounter);
+
+// halts the job until counter reaches targetValue and then returns.
+// this function will also free the counter once it's completed
+// NOTE: this function should not be called from outside of fibers
+extern DECLSPEC void KIWI_SchedulerWaitForCounterAndFree(struct KIWI_Scheduler* scheduler, struct KIWI_Counter* counter, int targetValue);
+
+// halts the job until counter reaches targetValue and then returns.
+// this function WILL NOT free the counter, the programmer must free the counter
+// NOTE: this function should not be called from outside of fibers
+extern DECLSPEC void KIWI_SchedulerWaitForCounter(struct KIWI_Scheduler* scheduler, struct KIWI_Counter* counter, int targetValue);
 
 #ifdef __cplusplus
 }

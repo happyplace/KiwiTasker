@@ -13,7 +13,6 @@ typedef struct KIWI_FiberPool
 	int poolSize;
 } KIWI_FiberPool;
 
-
 KIWI_Fiber* KIWI_GetFiberElement(KIWI_FiberPool* pool, int index)
 {
 	KIWI_ASSERT(pool);

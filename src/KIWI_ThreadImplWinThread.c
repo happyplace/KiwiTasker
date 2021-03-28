@@ -124,7 +124,6 @@ void KIWI_ThreadImplShutdownWorkerThreads(struct KIWI_ThreadImpl* threadImpl)
 {
 	KIWI_ASSERT(threadImpl);
 
-	// TODO: trigger worker threads to shutdown
 	WaitForMultipleObjects(threadImpl->workerCount, threadImpl->handles, TRUE, INFINITE);
 
 	for (int i = 0; i < threadImpl->workerCount; ++i)
@@ -197,6 +196,8 @@ void KIWI_ThreadImplSleepUntilJobAdded(struct KIWI_ThreadImpl* threadImpl, atomi
 
 void KIWI_ThreadImplSignalWorkerThreadsToQuit(struct KIWI_ThreadImpl* threadImpl, atomic_bool* quitWorkerThreads)
 {
+	KIWI_ASSERT(threadImpl);
+
 	EnterCriticalSection(&threadImpl->workerMutex);
 	atomic_store(quitWorkerThreads, true);
 	LeaveCriticalSection(&threadImpl->workerMutex);
