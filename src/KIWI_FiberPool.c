@@ -26,7 +26,6 @@ KIWI_Fiber* KIWI_GetFiberElement(KIWI_FiberPool* pool, int index)
 	return (KIWI_Fiber*)((char*)pool->fibers + (sizeof(KIWI_Fiber) * index));
 }
 
-// creates a pool of fibers of size poolSize. The Object returned by this function needs to be freed with KIWI_FreeFiberPool
 struct KIWI_FiberPool* KIWI_CreateFiberPool(int poolSize, int stackSize)
 {
 	KIWI_ASSERT(poolSize >= 1 && "pool size has to be greater than zero");
@@ -64,7 +63,6 @@ struct KIWI_FiberPool* KIWI_CreateFiberPool(int poolSize, int stackSize)
 	return fiberPool;
 }
 
-// frees all memory associated with a fiber pool
 void KIWI_FreeFiberPool(struct KIWI_FiberPool* fiberPool)
 {
 	KIWI_ASSERT(fiberPool);
@@ -81,7 +79,6 @@ void KIWI_FreeFiberPool(struct KIWI_FiberPool* fiberPool)
 	free(fiberPool);
 }
 
-// returns the next free fiber in the pool
 KIWI_Fiber* KIWI_FiberPoolGet(struct KIWI_FiberPool* fiberPool)
 {
 	KIWI_ASSERT(fiberPool);
@@ -101,7 +98,6 @@ KIWI_Fiber* KIWI_FiberPoolGet(struct KIWI_FiberPool* fiberPool)
 	return fiber;
 }
 
-// returns fiber to pool
 void KIWI_FiberPoolReturn(struct KIWI_FiberPool* fiberPool, KIWI_Fiber* fiber)
 {
 	KIWI_ASSERT(fiberPool);

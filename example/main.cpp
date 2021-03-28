@@ -1,9 +1,5 @@
 #include <stdio.h>
 
-//#include "../external/simple-stdatomic-for-VS-Clang/stdatomic.h"
-
-//#include "fcontext/fcontext.h"
-
 #include "kiwi/KIWI_Scheduler.h"
 
 #include "kiwi/KIWI_Queue.h"
@@ -97,7 +93,6 @@ void StartJobs(KIWI_Scheduler* scheduler, void* arg)
     KIWI_Counter* counter = NULL;
     KIWI_SchedulerAddJobs(scheduler, jobs, 2, KIWI_JobPriority_Normal, &counter);
     KIWI_SchedulerWaitForCounter(scheduler, counter, 0);
-
     KIWI_SchedulerFreeCounter(scheduler, counter);
 
     printf("StartJobs - End\n");

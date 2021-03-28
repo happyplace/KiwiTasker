@@ -37,6 +37,7 @@ set(kiwi-tasker-src
 	"include/kiwi/KIWI_FiberPool.h"
 	"include/kiwi/KIWI_Counter.h"
 	"include/kiwi/KIWI_Array.h"
+	"include/kiwi/KIWI_CounterPool.h"
 )
 
 set(kiwi-tasker-src ${kiwi-tasker-src}
@@ -47,6 +48,7 @@ set(kiwi-tasker-src ${kiwi-tasker-src}
 	"src/KIWI_FiberPool.c"
 	"src/KIWI_Counter.c"
 	"src/KIWI_Array.c"
+	"src/KIWI_CounterPool.c"
 )
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
