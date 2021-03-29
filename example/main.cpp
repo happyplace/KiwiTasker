@@ -1,8 +1,12 @@
 #include <stdio.h>
+#include <cstdlib>
 
 #include <atomic>
 #include <chrono>
 #include <thread>
+#include <vector>
+
+#include <time.h>
 
 #include "kiwi/KIWI_Scheduler.h"
 
@@ -78,6 +82,29 @@ void TestJob(KIWI_Scheduler* scheduler, void* arg)
     printf("TestJob - End\n");
 }
 
+struct SeedData
+{
+    unsigned int seed = 0;
+};
+
+void GenerateNumbersAndPrint(KIWI_Scheduler* scheduler, void* arg)
+{
+    SeedData* data = reinterpret_cast<SeedData*>(arg);
+
+    srand(data->seed);
+
+    std::vector<int> numbers;
+    for (int i = 0; i < 10; ++i)
+    {
+        numbers.push_back(rand());
+    }
+
+    for (const int& num : numbers)
+    {
+        printf("Rand Num: %i", num);
+    }
+}
+
 void StartJobs(KIWI_Scheduler* scheduler, void* arg)
 {
     std::atomic_bool* endApp = reinterpret_cast<std::atomic_bool*>(arg);
@@ -100,8 +127,10 @@ void StartJobs(KIWI_Scheduler* scheduler, void* arg)
     jobs[0].entry = TestJob;
     jobs[0].arg = NULL;
 
-    //jobs[1].entry;
-    //jobs[1].arg;
+    SeedData seedData;
+    seedData.seed = static_cast<int>(time(NULL));
+    jobs[1].entry = GenerateNumbersAndPrint;
+    jobs[1].arg = &seedData;
 
     KIWI_Counter* counter = NULL;
     KIWI_SchedulerAddJobs(scheduler, jobs, size, KIWI_JobPriority_Normal, &counter);
