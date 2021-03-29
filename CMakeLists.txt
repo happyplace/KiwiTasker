@@ -59,6 +59,14 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 	)
 endif()
 
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+	add_definitions(-DKIWI_USE_PTHREAD_IMPL)
+	set(kiwi-tasker-src ${kiwi-tasker-src}
+		"include/kiwi/KIWI_ThreadImplPthread.h"
+		"src/KIWI_ThreadImplPthread.c"
+	)
+endif()
+
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 	add_definitions(-DKIWI_USE_SIMPLE_STDATOMIC)
 	set(kiwi-tasker-src ${kiwi-tasker-src}

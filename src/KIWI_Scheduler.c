@@ -1,6 +1,7 @@
 #include "kiwi/KIWI_Scheduler.h"
 
 #include <malloc.h>
+#include <string.h>
 
 #include "kiwi/KIWI_ThreadImpl.h"
 #include "kiwi/KIWI_FiberWorkerStorage.h"

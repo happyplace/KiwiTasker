@@ -1,15 +1,15 @@
 #include <stdio.h>
 
+#include <atomic>
+#include <chrono>
+#include <thread>
+
 #include "kiwi/KIWI_Scheduler.h"
 
-#include "kiwi/KIWI_Queue.h"
-#include "kiwi/KIWI_Job.h"
-
+#ifdef HAS_SUPPORT_DX12_IN_EXAMPLE
 #include <d3d12.h>
 #include <dxgi1_4.h>
 #include <wrl.h>
-
-#include <atomic>
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -17,7 +17,9 @@
 #if defined(DEBUG) || defined(_DEBUG)
 #include <crtdbg.h>
 #endif // defined(DEBUG) || defined(_DEBUG)
+#endif
 
+#ifdef HAS_SUPPORT_DX12_IN_EXAMPLE
 struct TestData
 {
     int num1 = 0;
@@ -40,6 +42,7 @@ void TheSuperSuperTest(KIWI_Scheduler* scheduler, void* arg)
     }
 #endif // defined(DEBUG) || defined(_DEBUG)
 }
+#endif
 
 struct PrintJobData
 {
@@ -79,19 +82,29 @@ void StartJobs(KIWI_Scheduler* scheduler, void* arg)
 {
     std::atomic_bool* endApp = reinterpret_cast<std::atomic_bool*>(arg);
 
+    KIWI_Job jobs[3];
+
+    int size = 2;
+
+#ifdef HAS_SUPPORT_DX12_IN_EXAMPLE
+    size++;
+
     TestData testData;
     testData.num1 = 8001;
     testData.num2 = 1337;
+    
+    jobs[2].entry = TheSuperSuperTest;
+    jobs[2].arg = &testData;
+#endif
 
-    KIWI_Job jobs[2];
-    jobs[0].entry = TheSuperSuperTest;
-    jobs[0].arg = &testData;
+    jobs[0].entry = TestJob;
+    jobs[0].arg = NULL;
 
-    jobs[1].entry = TestJob;
-    jobs[1].arg = NULL;
+    //jobs[1].entry;
+    //jobs[1].arg;
 
     KIWI_Counter* counter = NULL;
-    KIWI_SchedulerAddJobs(scheduler, jobs, 2, KIWI_JobPriority_Normal, &counter);
+    KIWI_SchedulerAddJobs(scheduler, jobs, size, KIWI_JobPriority_Normal, &counter);
     KIWI_SchedulerWaitForCounter(scheduler, counter, 0);
     KIWI_SchedulerFreeCounter(scheduler, counter);
 
@@ -122,7 +135,7 @@ int main(int /*argc*/, char** /*argv*/)
 
     while (!quitApp.load())
     {
-        Sleep(1000);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
 
     KIWI_FreeScheduler(scheduler);
