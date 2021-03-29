@@ -7,7 +7,6 @@
 #include "kiwi/KIWI_Atomics.h"
 #include "kiwi/KIWI_SpinLock.h"
 #include "kiwi/KIWI_Queue.h"
-#include "kiwi/KIWI_Job.h"
 #include "kiwi/KIWI_FiberPool.h"
 #include "kiwi/KIWI_Array.h"
 #include "kiwi/KIWI_Counter.h"
@@ -313,7 +312,7 @@ void KIWI_FreeScheduler(KIWI_Scheduler* scheduler)
 	free(scheduler);
 }
 
-void KIWI_SchedulerAddJob(struct KIWI_Scheduler* scheduler, const struct KIWI_Job* job, const KIWI_JobPriority priority, struct KIWI_Counter** counter)
+void KIWI_SchedulerAddJob(struct KIWI_Scheduler* scheduler, const KIWI_Job* job, const KIWI_JobPriority priority, struct KIWI_Counter** counter)
 {
 	KIWI_ASSERT(scheduler);
 	KIWI_ASSERT(job);
@@ -338,7 +337,7 @@ void KIWI_SchedulerFreeCounter(struct KIWI_Scheduler* scheduler, struct KIWI_Cou
 	KIWI_CounterPoolReturn(scheduler->counterPool, counter);
 }
 
-void KIWI_SchedulerAddJobs(struct KIWI_Scheduler* scheduler, const struct KIWI_Job* job, const int jobCount, const KIWI_JobPriority priority, struct KIWI_Counter** outCounter)
+void KIWI_SchedulerAddJobs(struct KIWI_Scheduler* scheduler, const KIWI_Job* job, const int jobCount, const KIWI_JobPriority priority, struct KIWI_Counter** outCounter)
 {	
 	KIWI_ASSERT(scheduler);
 	KIWI_ASSERT(job);

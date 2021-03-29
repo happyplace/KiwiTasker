@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kiwi/KIWI_std.h"
+#include "kiwi/KIWI_Job.h"
 #include "kiwi/KIWI_JobPriority.h"
 
 #ifdef __cplusplus
@@ -48,12 +49,12 @@ extern DECLSPEC void KIWI_FreeScheduler(struct KIWI_Scheduler* scheduler);
 // Adds the job to the job queue at priority level. A copy of the job is kept so it's safe to delete the job definition. Any memory used by the argument
 // needs to be valid until the job completes. 
 // If counter is not NULL a counter will be created and used to track the job completion
-extern DECLSPEC void KIWI_SchedulerAddJob(struct KIWI_Scheduler* scheduler, const struct KIWI_Job* job, const KIWI_JobPriority priority, struct KIWI_Counter** counter);
+extern DECLSPEC void KIWI_SchedulerAddJob(struct KIWI_Scheduler* scheduler, const KIWI_Job* job, const KIWI_JobPriority priority, struct KIWI_Counter** counter);
 
 // Adds the jobs to the job queue at priority level. A copy of the job is kept so it's safe to delete the job definitions but any memory used by the argument 
 // needs to be valid until the jobs completes.
 // If counter is not NULL a counter will be created and used to track the jobs completion
-extern DECLSPEC void KIWI_SchedulerAddJobs(struct KIWI_Scheduler* scheduler, const struct KIWI_Job* job, const int jobCount, const KIWI_JobPriority priority, struct KIWI_Counter** counter);
+extern DECLSPEC void KIWI_SchedulerAddJobs(struct KIWI_Scheduler* scheduler, const KIWI_Job* job, const int jobCount, const KIWI_JobPriority priority, struct KIWI_Counter** counter);
 
 // frees a counter, this is only necessarily if you don't use WaitForCounterAndFree
 // NOTE: do not free counters while there active jobs attached to it.
