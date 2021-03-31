@@ -215,7 +215,6 @@ WORKER_THREAD_DEFINITION(arg)
 			fiber = workerStorage->fiber;
 
 			// if we're coming back here we need to check if the fiber actually completed
-			// if it didn't it's already been added to the waiting queue so we just do nothing and look for the next job
 			if (workerStorage->completedFiber)
 			{
 				if (fiber->counter)
