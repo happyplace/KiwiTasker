@@ -101,7 +101,7 @@ void GenerateNumbersAndPrint(KIWI_Scheduler* scheduler, void* arg)
 
     for (const int& num : numbers)
     {
-        printf("Rand Num: %i", num);
+        printf("Rand Num: %i\n", num);
     }
 }
 
