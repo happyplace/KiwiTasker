@@ -5,6 +5,8 @@ cmake_policy(SET CMP0025 NEW)
 
 project(KiwiTasker C)
 
+option(ValgrindSupport "This will register fiber stacks with valgrind so it can probably track them" OFF)
+
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
     set(CMAKE_C_FLAGS "-Wall -Werror")
 endif()
@@ -75,6 +77,10 @@ if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
 		"external/simple-stdatomic-for-VS-Clang/stdatomic.h"
 		"external/simple-stdatomic-for-VS-Clang/stdatomic.c"
 	)
+endif()
+
+if (ValgrindSupport)
+	add_definitions(-DKIWI_ENABLE_VALGRIND_SUPPORT)
 endif()
 
 include_directories("external/deboost.context/include")

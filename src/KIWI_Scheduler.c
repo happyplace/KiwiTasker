@@ -13,6 +13,13 @@
 #include "kiwi/KIWI_Counter.h"
 #include "kiwi/KIWI_CounterPool.h"
 
+#ifdef KIWI_ENABLE_VALGRIND_SUPPORT
+	#if __has_include(<valgrind/valgrind.h>)
+		#define KIWI_HAS_VALGRIND
+		#include <valgrind/valgrind.h>
+	#endif // __has_include(<valgrind/valgrind.h>)
+#endif 
+
 typedef struct KIWI_Scheduler
 {
 	struct KIWI_ThreadImpl* threadImpl;
@@ -206,6 +213,11 @@ WORKER_THREAD_DEFINITION(arg)
 				// this is a new fiber, we need to create new context 
 				fcontext_t fiberEntry = make_fcontext(fiber->stack.sptr, fiber->stack.ssize, KIWI_FiberEntry);
 
+#if defined(KIWI_HAS_VALGRIND)
+                // Before context switch, register our stack with Valgrind.
+                fiber->stackId = VALGRIND_STACK_REGISTER((char*)fiber->stack.sptr - fiber->stack.ssize, fiber->stack.sptr);
+#endif // defined(KIWI_HAS_VALGRIND)
+
 				// make the jump, see you on the other side
 				fiber->context = jump_fcontext(fiberEntry, NULL);
 			}
@@ -223,6 +235,10 @@ WORKER_THREAD_DEFINITION(arg)
 					KIWI_CheckWaitingFibers(workerStorage->scheduler, fiber->counter, value);
 				}
 
+#if defined(KIWI_HAS_VALGRIND)
+                // Before we give back the fiber we deregister our stack with Valgrind.
+                VALGRIND_STACK_DEREGISTER(fiber->stackId);
+#endif // defined(KIWI_HAS_VALGRIND)
 				KIWI_FiberPoolReturn(workerStorage->scheduler->fiberPool, fiber);
 			}
 			else
