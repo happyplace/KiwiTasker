@@ -2,6 +2,7 @@
 
 #include <malloc.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include <sched.h>
 #include <pthread.h>
@@ -27,7 +28,16 @@ typedef struct KIWI_ThreadImpl
 {
     pthread_t* workerThreadIds;
     int workerCount;
+    pthread_cond_t workerCondVar;
+    pthread_mutex_t workerMutex;
+
 } KIWI_ThreadImpl;
+
+void KIWI_ThreadImplCreateConditionalAndMutexVarialbe(KIWI_ThreadImpl* threadImpl)
+{
+    PTRD_ERR_HNDLR(pthread_cond_init(&threadImpl->workerCondVar, NULL));
+    PTRD_ERR_HNDLR(pthread_mutex_init(&threadImpl->workerMutex, NULL));   
+}
 
 struct KIWI_ThreadImpl* KIWI_ThreadImplCreateAndStartWorkerThreads(int workerCount, void*(*threadFunction) (void*))
 {
@@ -47,6 +57,8 @@ struct KIWI_ThreadImpl* KIWI_ThreadImplCreateAndStartWorkerThreads(int workerCou
 
     threadImpl->workerCount = workerCount;
 
+    KIWI_ThreadImplCreateConditionalAndMutexVarialbe(threadImpl);
+
     char threadNameBuffer[THREAD_NAME_BUFFER_SIZE];
 
     for (int i = 0; i < workerCount; ++i)
@@ -62,8 +74,9 @@ struct KIWI_ThreadImpl* KIWI_ThreadImplCreateAndStartWorkerThreads(int workerCou
         CPU_SET((size_t)i, &cpuAffinity);
         PTRD_ERR_HNDLR(pthread_attr_setaffinity_np(&attr, sizeof(cpuAffinity), &cpuAffinity));
 
-        pthread_t* threadId = (pthread_t*)(char*)threadImpl->workerThreadIds + (sizeof(pthread_t) * i);
-        PTRD_ERR_HNDLR(pthread_create(threadId, &attr, threadFunction, NULL));
+        pthread_t threadId = 0;
+        PTRD_ERR_HNDLR(pthread_create(&threadId, &attr, threadFunction, NULL));
+        memcpy((char*)threadImpl->workerThreadIds + (sizeof(pthread_t) * i), &threadId, sizeof(threadId));
 
         int threadNameSize = snprintf(threadNameBuffer, THREAD_NAME_BUFFER_SIZE, "Kiwi Worker %i", i);
 		// if the resulting thread name is going to be larger than the max thread name size, truncate the name
@@ -72,7 +85,7 @@ struct KIWI_ThreadImpl* KIWI_ThreadImplCreateAndStartWorkerThreads(int workerCou
 			threadNameBuffer[THREAD_NAME_MAX_SIZE - 1] = '\0';
 		}
 
-        PTRD_ERR_HNDLR(pthread_setname_np(*threadId, threadNameBuffer));
+        PTRD_ERR_HNDLR(pthread_setname_np(threadId, threadNameBuffer));
 
         PTRD_ERR_HNDLR(pthread_attr_destroy(&attr));
     }
@@ -82,6 +95,20 @@ struct KIWI_ThreadImpl* KIWI_ThreadImplCreateAndStartWorkerThreads(int workerCou
 
 void KIWI_ThreadImplShutdownWorkerThreads(struct KIWI_ThreadImpl* threadImpl)
 {
+    KIWI_ASSERT(threadImpl);
+
+    for (int i = 0; i < threadImpl->workerCount; ++i)
+    {
+        pthread_t threadId = 0;
+        memcpy(&threadId, (char*)threadImpl->workerThreadIds + (sizeof(pthread_t) * i), sizeof(pthread_t));
+        PTRD_ERR_HNDLR(pthread_join(threadId, NULL));
+    }
+
+    PTRD_ERR_HNDLR(pthread_cond_destroy(&threadImpl->workerCondVar));
+    PTRD_ERR_HNDLR(pthread_mutex_destroy(&threadImpl->workerMutex));
+
+    free(threadImpl->workerThreadIds);
+	free(threadImpl);
 }
 
 void KIWI_ThreadImplBlockSignalsOnWorkerThread()
@@ -100,22 +127,34 @@ int KIWI_ThreadImplGetCpuCount()
 
 void KIWI_ThreadImplNotifyOneWorkerThread(struct KIWI_ThreadImpl* threadImpl)
 {
+    KIWI_ASSERT(threadImpl);
 
+    PTRD_ERR_HNDLR(pthread_cond_signal(&threadImpl->workerCondVar));
 }
 
 void KIWI_ThreadImplNotifyAllWorkerThreads(struct KIWI_ThreadImpl* threadImpl)
 {
+    KIWI_ASSERT(threadImpl);
 
+    PTRD_ERR_HNDLR(pthread_cond_broadcast(&threadImpl->workerCondVar));
 }
 
 void KIWI_ThreadImplSleepUntilJobAdded(struct KIWI_ThreadImpl* threadImpl, atomic_bool* quitWorkerThreads)
 {
+    KIWI_ASSERT(threadImpl);
 
+    PTRD_ERR_HNDLR(pthread_mutex_lock(&threadImpl->workerMutex));
+    PTRD_ERR_HNDLR(pthread_cond_wait(&threadImpl->workerCondVar, &threadImpl->workerMutex));
+    PTRD_ERR_HNDLR(pthread_mutex_unlock(&threadImpl->workerMutex));
 }
 
 void KIWI_ThreadImplSignalWorkerThreadsToQuit(struct KIWI_ThreadImpl* threadImpl, atomic_bool* quitWorkerThreads)
 {
+	KIWI_ASSERT(threadImpl);
 
+    PTRD_ERR_HNDLR(pthread_mutex_lock(&threadImpl->workerMutex));
+	atomic_store(quitWorkerThreads, true);
+    PTRD_ERR_HNDLR(pthread_mutex_unlock(&threadImpl->workerMutex));
 }
 
 int KIWI_ThreadImplGetWorkerThreadIndex()
