@@ -37,6 +37,10 @@ int KIWI_CounterLockAndGetValue(KIWI_Counter* counter);
 // this unlocks the counter. This should be called after the job has been added to the wait list
 void KIWI_CounterUnlock(KIWI_Counter* counter);
 
+// this function is used to set the counter back to zero when counters are used in counter pools
+// this function IS NOT thread-safe
+void KIWI_CounterResetToZero(KIWI_Counter* counter);
+
 #ifdef __cplusplus
 }
 #endif

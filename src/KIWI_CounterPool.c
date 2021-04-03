@@ -96,6 +96,8 @@ struct KIWI_Counter* KIWI_CounterPoolGet(struct KIWI_CounterPool* counterPool)
 
 	KIWI_ASSERT(counter && "no more free counters in pool increase pool size");
 
+	KIWI_CounterResetToZero(counter);
+
 	return counter;
 }
 

@@ -108,3 +108,12 @@ void KIWI_CounterUnlock(KIWI_Counter* counter)
 
 	KIWI_UnlockSpinLock(data->lock);
 }
+
+void KIWI_CounterResetToZero(KIWI_Counter* counter)
+{
+	KIWI_ASSERT(counter);
+	KIWI_ASSERT(counter->data);
+
+	KIWI_CounterData* data = counter->data;
+	data->value = 0;
+}
