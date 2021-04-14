@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <cstdlib>
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <thread>
-#include <vector>
 
 #include <time.h>
 
@@ -87,16 +87,16 @@ struct SeedData
     unsigned int seed = 0;
 };
 
-void GenerateNumbersAndPrint(KIWI_Scheduler* scheduler, void* arg)
+void GenerateNumbersAndPrint(KIWI_Scheduler* /*scheduler*/, void* arg)
 {
     SeedData* data = reinterpret_cast<SeedData*>(arg);
 
     srand(data->seed);
 
-    std::vector<int> numbers;
+    std::array<int, 10> numbers;
     for (int i = 0; i < 10; ++i)
     {
-        numbers.push_back(rand());
+        numbers[i] = rand();
     }
 
     for (const int& num : numbers)
