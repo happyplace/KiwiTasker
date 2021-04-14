@@ -16,7 +16,10 @@ typedef struct KIWI_Fiber
     struct KIWI_Counter* counter;
     fcontext_stack_t stack;
     fcontext_transfer_t context;
-    struct KIWI_Fiber* next;    
+    struct KIWI_Fiber* next;   
+#ifdef KIWI_ENABLE_VALGRIND_SUPPORT 
+    unsigned int stackId;
+#endif // KIWI_ENABLE_VALGRIND_SUPPORT 
 } KIWI_Fiber;
 
 struct KIWI_FiberPool;

@@ -9,6 +9,14 @@
 		#else
 			#define DECLSPEC
 		#endif
+	#elif defined(__GNUC__) && __GNUC__ >= 4
+		#ifdef KIWI_DLL_EXPORT
+			#define DECLSPEC __attribute__ ((visibility("default")))
+		#else
+			#define DECLSPEC
+		#endif
+	#else
+		#define DECLSPEC
 	#endif
 #endif
 

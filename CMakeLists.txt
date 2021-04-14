@@ -1,14 +1,17 @@
 cmake_minimum_required(VERSION 3.0)
 
 cmake_policy(SET CMP0054 NEW)
+cmake_policy(SET CMP0025 NEW)
 
 project(KiwiTasker C)
 
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+option(ValgrindSupport "This will register fiber stacks with valgrind so it can probably track them" OFF)
+
+if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
     set(CMAKE_C_FLAGS "-Wall -Werror")
 endif()
 
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
     set(MSVC_COMMON_FLAGS 
 	    /nologo     # Don't show version info
 	    /W4         # Enable warning level 4
@@ -51,7 +54,7 @@ set(kiwi-tasker-src ${kiwi-tasker-src}
 	"src/KIWI_CounterPool.c"
 )
 
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
 	add_definitions(-DKIWI_USE_WINTHREAD_IMPL)	
 	set(kiwi-tasker-src ${kiwi-tasker-src}
 		"include/kiwi/KIWI_ThreadImplWinThread.h"
@@ -59,12 +62,25 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 	)
 endif()
 
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")	
+	add_definitions(-D_GNU_SOURCE)
+	add_definitions(-DKIWI_USE_PTHREAD_IMPL)
+	set(kiwi-tasker-src ${kiwi-tasker-src}
+		"include/kiwi/KIWI_ThreadImplPthread.h"
+		"src/KIWI_ThreadImplPthread.c"
+	)
+endif()
+
+if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
 	add_definitions(-DKIWI_USE_SIMPLE_STDATOMIC)
 	set(kiwi-tasker-src ${kiwi-tasker-src}
 		"external/simple-stdatomic-for-VS-Clang/stdatomic.h"
 		"external/simple-stdatomic-for-VS-Clang/stdatomic.c"
 	)
+endif()
+
+if (ValgrindSupport)
+	add_definitions(-DKIWI_ENABLE_VALGRIND_SUPPORT)
 endif()
 
 include_directories("external/deboost.context/include")

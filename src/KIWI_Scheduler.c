@@ -1,6 +1,7 @@
 #include "kiwi/KIWI_Scheduler.h"
 
 #include <malloc.h>
+#include <string.h>
 
 #include "kiwi/KIWI_ThreadImpl.h"
 #include "kiwi/KIWI_FiberWorkerStorage.h"
@@ -11,6 +12,13 @@
 #include "kiwi/KIWI_Array.h"
 #include "kiwi/KIWI_Counter.h"
 #include "kiwi/KIWI_CounterPool.h"
+
+#ifdef KIWI_ENABLE_VALGRIND_SUPPORT
+	#if __has_include(<valgrind/valgrind.h>)
+		#define KIWI_HAS_VALGRIND
+		#include <valgrind/valgrind.h>
+	#endif // __has_include(<valgrind/valgrind.h>)
+#endif 
 
 typedef struct KIWI_Scheduler
 {
@@ -205,6 +213,11 @@ WORKER_THREAD_DEFINITION(arg)
 				// this is a new fiber, we need to create new context 
 				fcontext_t fiberEntry = make_fcontext(fiber->stack.sptr, fiber->stack.ssize, KIWI_FiberEntry);
 
+#if defined(KIWI_HAS_VALGRIND)
+                // Before context switch, register our stack with Valgrind.
+                fiber->stackId = VALGRIND_STACK_REGISTER((char*)fiber->stack.sptr - fiber->stack.ssize, fiber->stack.sptr);
+#endif // defined(KIWI_HAS_VALGRIND)
+
 				// make the jump, see you on the other side
 				fiber->context = jump_fcontext(fiberEntry, NULL);
 			}
@@ -214,7 +227,6 @@ WORKER_THREAD_DEFINITION(arg)
 			fiber = workerStorage->fiber;
 
 			// if we're coming back here we need to check if the fiber actually completed
-			// if it didn't it's already been added to the waiting queue so we just do nothing and look for the next job
 			if (workerStorage->completedFiber)
 			{
 				if (fiber->counter)
@@ -223,6 +235,10 @@ WORKER_THREAD_DEFINITION(arg)
 					KIWI_CheckWaitingFibers(workerStorage->scheduler, fiber->counter, value);
 				}
 
+#if defined(KIWI_HAS_VALGRIND)
+                // Before we give back the fiber we deregister our stack with Valgrind.
+                VALGRIND_STACK_DEREGISTER(fiber->stackId);
+#endif // defined(KIWI_HAS_VALGRIND)
 				KIWI_FiberPoolReturn(workerStorage->scheduler->fiberPool, fiber);
 			}
 			else

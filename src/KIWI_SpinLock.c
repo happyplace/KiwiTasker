@@ -2,7 +2,7 @@
 
 #include <malloc.h>
 
-#include "kiwi/KIWI_std.h"
+#include "kiwi/KIWI_Std.h"
 #include "kiwi/KIWI_Atomics.h"
 
 typedef struct KIWI_SpinLock
