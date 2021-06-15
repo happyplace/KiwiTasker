@@ -4,10 +4,11 @@
 
 #include "kiwi/KIWI_Std.h"
 #include "kiwi/KIWI_SpinLock.h"
+#include "kiwi/KIWI_Atomics.h"
 
 typedef struct KIWI_CounterData
 {
-	int value;
+	atomic_int value;
 	struct KIWI_SpinLock* lock;
 } KIWI_CounterData;
 
@@ -37,8 +38,8 @@ void KIWI_PrepareCounter(KIWI_Counter* counter)
 	}
 
 	KIWI_CounterData* data = counter->data;
-	data->value = 0;
 	data->lock = KIWI_CreateSpinLock();
+	atomic_init(&data->value, 0);
 }
 
 void KIWI_FreeCounter(KIWI_Counter* counter)
@@ -69,7 +70,7 @@ void KIWI_IncrementCounter(KIWI_Counter* counter)
 	KIWI_CounterData* data = counter->data;
 
 	KIWI_LockSpinLock(data->lock);
-	data->value++;
+	atomic_fetch_add(&data->value, 1);
 	KIWI_UnlockSpinLock(data->lock);
 }
 
@@ -81,8 +82,8 @@ int KIWI_DecrementCounter(KIWI_Counter* counter)
 	KIWI_CounterData* data = counter->data;
 
 	KIWI_LockSpinLock(data->lock);
-	data->value--;
-	int value = data->value;
+	int value = atomic_fetch_sub(&data->value, 1);
+	value--;
 	KIWI_UnlockSpinLock(data->lock);
 
 	return value;
@@ -96,7 +97,7 @@ int KIWI_CounterLockAndGetValue(KIWI_Counter* counter)
 	KIWI_CounterData* data = counter->data;
 
 	KIWI_LockSpinLock(data->lock);
-	return data->value;
+	return atomic_load(&data->value);
 }
 
 void KIWI_CounterUnlock(KIWI_Counter* counter)
@@ -115,5 +116,5 @@ void KIWI_CounterResetToZero(KIWI_Counter* counter)
 	KIWI_ASSERT(counter->data);
 
 	KIWI_CounterData* data = counter->data;
-	data->value = 0;
+	atomic_store(&data->value, 0);
 }
